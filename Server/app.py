@@ -1,14 +1,26 @@
 from fastapi import FastAPI, status, Request
 from fastapi.responses import JSONResponse
-from routes import index
+from routes import index, user
 from middleware.logger import log_requests
+from config.db import init_db, close_db
+from config.settings import settings
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+    await close_db()
+
 
 app = FastAPI(
-    title="V.E.R.S.E API",
-    version="1.0.0",
+    title=settings.api_title,
+    version=settings.api_version,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json"
+    openapi_url="/api/openapi.json",
+    lifespan=lifespan
 )
 
 # log - middleware
@@ -16,6 +28,7 @@ app.middleware("http")(log_requests)
 
 # Routers
 app.include_router(index.router, prefix="/api", tags=["General"])
+app.include_router(user.router, prefix="/api/users", tags=["Users"])
 
 # Root route
 @app.get("/")
