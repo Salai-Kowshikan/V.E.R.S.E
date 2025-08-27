@@ -1,9 +1,8 @@
 use risc0_zkvm::Receipt;
 use serde_json;
 use std::fs;
-
 fn main() {
-    const METHOD_ID: [u32; 8] =  [1452707642, 2073294129, 1860126072, 2724424061, 2984836555, 809201159, 920081389, 159827681];
+    const METHOD_ID: [u32; 8] =  [4615346, 3088364040, 3309643489, 2403364783, 529424834, 3266678953, 590165670, 1240344216];
 
     //  Load the proof.json
     let data = fs::read_to_string("proof.json")
