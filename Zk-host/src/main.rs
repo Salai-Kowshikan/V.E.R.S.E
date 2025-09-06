@@ -12,7 +12,7 @@ fn main() {
     std::io::stdin().read_line(&mut path).expect("Failed to read input");
     let path = path.trim();
    
-    let elf_bytes = fs::read(path).expect("Failed to read ELF file");
+    let elf_bytes = fs::read(path).expect("shobhaaaaaa");
     let guest_elf: &[u8] = &elf_bytes;
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
@@ -70,5 +70,6 @@ fn main() {
     // println!("Guest id : {:?}", GUEST_ID);
     // println!("✅ Proof verified successfully!");
 }
+
 
 
