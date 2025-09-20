@@ -1,0 +1,8 @@
+[package]
+name = "verse"
+version = "0.1.0"
+edition = "2024"
+authors = ["Salai Kowshikan"]
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }

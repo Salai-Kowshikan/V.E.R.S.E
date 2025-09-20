@@ -4,6 +4,7 @@ use methods::{
     LINEARREGRESSION_ELF, LINEARREGRESSION_ID
 };
 use risc0_zkvm::{default_prover, ExecutorEnv};
+use std::fs;
 
 fn main() {
     // Initialize tracing. In order to view logs, run `RUST_LOG=info cargo run`
@@ -11,6 +12,7 @@ fn main() {
         .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
         .init();
 
+    println!("Hash id of LINEARREGRESSION_ELF: {:?}", LINEARREGRESSION_ID);
     // An executor environment describes the configurations for the zkVM
     // including program inputs.
     // A default ExecutorEnv can be created like so:
@@ -22,6 +24,16 @@ fn main() {
     // To access this method, you'll need to use ExecutorEnv::builder(), which
     // creates an ExecutorEnvBuilder. When you're done adding input, call
     // ExecutorEnvBuilder::build().
+    println!("Type of LINEARREGRESSION_ELF: {}", std::any::type_name_of_val(&LINEARREGRESSION_ELF));
+    println!("First 16 bytes of LINEARREGRESSION_ELF: {:?}", &LINEARREGRESSION_ELF[..16]);
+
+    // Read ELF from disk
+    let elf_bytes = fs::read("/home/kowshik/V.E.R.S.E/ZK-guest/LinearRegression_exported").unwrap();
+    let elf_slice: &[u8] = &elf_bytes;  // Convert Vec<u8> to &[u8]
+
+    // println!("Type of elf_slice: {}", std::any::type_name_of_val(&elf_slice));
+    fs::write("LinearRegression_exported", LINEARREGRESSION_ELF)
+        .expect("Failed to write ELF file");
 
     // For example:
     let a: f32 = 2.5;  // slope
@@ -39,11 +51,13 @@ fn main() {
 
     // Proof information by proving the specified ELF binary.
     // This struct contains the receipt along with statistics about execution of the guest
-    let prove_info = prover
-        .prove(env, LINEARREGRESSION_ELF)
-        .unwrap();
-
+    // let prove_info = prover
+    //     .prove(env, LINEARREGRESSION_ELF)
+    //     .unwrap();
     // extract the receipt.
+    let prove_info = prover
+        .prove(env, elf_slice)
+        .unwrap();
     let receipt = prove_info.receipt;
 
     // TODO: Implement code for retrieving receipt journal here.
@@ -51,9 +65,42 @@ fn main() {
     // For example:
     let _output: u32 = receipt.journal.decode().unwrap();
 
+    println!("Got output: {_output}");
+
     // The receipt was verified at the end of proving, but the below code is an
     // example of how someone else could verify this receipt.
     receipt
         .verify(LINEARREGRESSION_ID)
         .unwrap();
 }
+
+
+// use std::fs;
+// use risc0_zkvm::{default_prover, ExecutorEnv};
+
+// fn main() {
+//     // Load ELF bytes from file
+//     let elf_bytes = fs::read("/home/kowshik/V.E.R.S.E/ZK-guest/test/LinearRegression").unwrap();
+
+//     // Build execution environment
+//     let a: f32 = 2.5;
+//     let b: f32 = 1.0;
+//     let env = ExecutorEnv::builder()
+//         .write(&a).unwrap()
+//         .write(&b).unwrap()
+//         .build().unwrap();
+
+//     // Prove
+//     let prover = default_prover();
+//     let prove_info = prover.prove(env, &elf_bytes).unwrap();
+//     let receipt = prove_info.receipt;
+
+//     // Read output
+//     let output: u32 = receipt.journal.decode().unwrap();
+//     println!("Got output: {output}");
+
+//     // ⚠️ Verification needs the ImageID (hash of the ELF).
+//     // You can compute it at runtime like this:
+//     // let image_id = risc0_zkvm::compute_image_id(&elf_bytes).unwrap();
+//     // receipt.verify(image_id).unwrap();
+// }
