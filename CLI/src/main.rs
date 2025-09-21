@@ -9,7 +9,6 @@ fn main() {
 			Arg::new("name")
 				.short('n')
 				.long("name")
-				.takes_value(true)
 				.help("Sets your name"),
 		)
 		.get_matches();
