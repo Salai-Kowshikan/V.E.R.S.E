@@ -1,3 +1,15 @@
+## Quick Install
+
+To quickly install the latest verse CLI, run:
+
+```bash
+curl -O https://raw.githubusercontent.com/Salai-Kowshikan/V.E.R.S.E/main/CLI/install-verse.sh
+chmod +x install-verse.sh
+./install-verse.sh
+```
+
+This will download and run the install script, which fetches the latest binary and installs it to `/usr/bin` (requires sudo).
+
 # V.E.R.S.E
 
 
