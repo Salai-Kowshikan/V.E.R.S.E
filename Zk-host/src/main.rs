@@ -112,11 +112,11 @@ fn main() {
     let b: f32 = buffer.trim().parse().expect("Please enter a valid number");
 
     let env = ExecutorEnv::builder()
-        .write(&to_vec(&model_type).unwrap())
+        .write(&model_type)
         .unwrap()
-        .write(&to_vec(&weights).unwrap())
+        .write(&weights)
         .unwrap()
-        .write(&to_vec(&b).unwrap())
+        .write(&b)
         .unwrap()
         .build()
         .unwrap();
