@@ -74,7 +74,7 @@
 
 
 use risc0_zkvm::{default_prover, ExecutorEnv};
-use risc0_zkvm::serde::{to_vec, from_slice};
+use risc0_zkvm::serde::from_slice;
 use serde_json;
 use std::fs;
 use std::io;
@@ -84,15 +84,14 @@ fn main() {
     let mut path = String::new();
     io::stdin().read_line(&mut path).expect("Failed to read input");
     let path = path.trim();
-    //let guest_elf = fs::read(path).expect("Failed to read ELF file");
-    let elf_bytes = fs::read(path).expect("shobhaaaaaa");
+    let elf_bytes = fs::read(path).expect("Failed to read ELF file");
     let guest_elf: &[u8] = &elf_bytes;
 
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
         .init();
 
-        println!("Select model type (1=linear, 2=multiple, 3=polynomial, 4=logistic):");
+    println!("Select model type (1=linear, 2=multiple, 3=polynomial, 4=logistic):");
     let mut buffer = String::new();
     io::stdin().read_line(&mut buffer).expect("Failed to read model type");
     let model_type: u32 = buffer.trim().parse().expect("Please enter a valid number");
@@ -112,11 +111,11 @@ fn main() {
     let b: f32 = buffer.trim().parse().expect("Please enter a valid number");
 
     let env = ExecutorEnv::builder()
-        .write(&to_vec(&model_type).unwrap())
+        .write(&model_type)
         .unwrap()
-        .write(&to_vec(&weights).unwrap())
+        .write(&weights)
         .unwrap()
-        .write(&to_vec(&b).unwrap())
+        .write(&b)
         .unwrap()
         .build()
         .unwrap();
@@ -125,14 +124,14 @@ fn main() {
     let prove_info = prover.prove(env, &guest_elf).unwrap();
     let receipt = prove_info.receipt;
 
-let output: Vec<f32> = from_slice(receipt.journal.bytes.as_slice()).unwrap();
+    // Decode Vec<(f32, f32)>
+    let output: Vec<(f32, f32)> = from_slice(receipt.journal.bytes.as_slice()).unwrap();
 
-println!("\n======= Inference Results =======");
-for (i, val) in output.iter().enumerate() {
-    println!("Sample {} => {}", i + 1, val);
-}
-println!("================================\n");
-
+    println!("\n======= Inference Results =======");
+    for (i, (y_pred, y_true)) in output.iter().enumerate() {
+        println!("Sample {} => Predicted: {}, True: {}", i + 1, y_pred, y_true);
+    }
+    println!("================================\n");
 
     let proof_json = serde_json::to_string_pretty(&receipt).expect("Failed to serialize receipt");
     fs::write("proof.json", &proof_json).expect("Failed to write proof file");
