@@ -5,7 +5,7 @@ use methods::{
 };
 
 use std::fs;
-
+// Testing signing key
 fn main() {
        fs::write("LinearRegression_exported", LINEARREGRESSION_ELF)
         .expect("Failed to write ELF file");
