@@ -1,16 +1,12 @@
 #!/bin/bash
 
-# Usage: ./install-verse.sh <github_tarball_url>
-# Example: ./install-verse.sh https://github.com/username/repo/releases/download/v0.1.0/verse.tar.gz
+
+# Usage: ./install-verse.sh
+# Downloads and installs the latest verse binary from the official GitHub repository.
 
 set -e
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <github_tarball_url>"
-    exit 1
-fi
-
-TAR_URL="$1"
+TAR_URL="https://raw.githubusercontent.com/Salai-Kowshikan/V.E.R.S.E/main/CLI/release/latest/verse.tar.gz"
 TMP_DIR=$(mktemp -d)
 
 # Download the tarball
@@ -27,13 +23,13 @@ if [ ! -f "verse" ]; then
 fi
 
 # Move the binary to ~/.local/bin (preferred) or ~/bin as fallback
-INSTALL_DIR="$HOME/.local/bin"
-mkdir -p "$INSTALL_DIR"
-mv verse "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/verse"
-
 echo "verse installed to $INSTALL_DIR. Make sure $INSTALL_DIR is in your PATH."
+# Move the binary to /usr/bin (requires sudo)
+INSTALL_DIR="/usr/bin"
+sudo mv verse "$INSTALL_DIR/"
+sudo chmod +x "$INSTALL_DIR/verse"
 
+echo "verse installed to $INSTALL_DIR. It should now be available in your PATH."
 # Clean up
 tmp_cleanup() {
     rm -rf "$TMP_DIR"
