@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 from config.settings import settings
-
+from models.user import User
 router = APIRouter()
 
 @router.get("")
@@ -11,7 +11,7 @@ def read_root():
 @router.get("/health")
 async def health_check():
     try:
-        from models.user import User
+ 
         await User.find().limit(1).to_list()
         
         return {
