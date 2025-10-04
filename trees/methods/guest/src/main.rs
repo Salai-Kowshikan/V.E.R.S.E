@@ -145,7 +145,8 @@
 extern crate alloc;
 use alloc::vec::Vec;
 use risc0_zkvm::guest::env;
-use risc0_zkvm::serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
+
 
 #[repr(C)]
 #[derive(Clone, Copy, Serialize, Deserialize)]

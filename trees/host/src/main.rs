@@ -53,16 +53,72 @@
 
 // }
 
-use risc0_zkvm::host::Prover;
+// use methods::{GUEST_CODE_FOR_ZK_PROOF_ELF, GUEST_CODE_FOR_ZK_PROOF_ID};
+// use risc0_zkvm::{default_prover, ExecutorEnv};
+// use std::fs;
+// use serde::{Serialize, Deserialize};
+
+// fn main() -> Result<(), Box<dyn std::error::Error>> {
+//     let model_path = "trees/host/src/iris_tree_nodes.bin";
+//     let model_bytes = fs::read(model_path)?;
+
+//     // Build environment with input
+//     let env = ExecutorEnv::builder()
+//         .write(&model_bytes)?
+//         .build()?;
+
+//     // Get default prover
+//     let prover = default_prover();
+
+//     // Run proof
+//     let prove_info = prover.prove(env, GUEST_CODE_FOR_ZK_PROOF_ELF)?;
+
+//     // Decode journal as Vec<u32>
+//     let predicted_classes: Vec<u32> = prove_info.receipt.journal.decode()?;
+//     println!("Predicted classes: {:?}", predicted_classes);
+
+//     // Verify proof
+//     prove_info.receipt.verify(GUEST_CODE_FOR_ZK_PROOF_ID)?;
+//     println!("Proof verified successfully!");
+
+//     Ok(())
+// }
+
+
+
+use methods::{GUEST_CODE_FOR_ZK_PROOF_ELF, GUEST_CODE_FOR_ZK_PROOF_ID};
+use risc0_zkvm::{default_prover, ExecutorEnv};
 use std::fs;
-use risc0_zkvm::serde::{Serialize, Deserialize}; // Updated imports
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let model_path = "trees/host/src/iris_tree_nodes.bin";
+    let model_path = "iris_tree_nodes.bin";
     let model_bytes = fs::read(model_path)?;
-    let mut prover = Prover::new(GUEST_CODE_FOR_ZK_PROOF_ELF, &model_bytes)?;
-    let receipt = prover.run()?;
-    let journal = receipt.get_journal_vec();
-    println!("Journal committed: {:?}", journal);
+
+    // Example ground truth labels (replace with your dataset labels)
+    let actual_classes: Vec<u32> = vec![0, 1, 2, 1, 0]; 
+
+    // Build environment and send model bytes
+    let env = ExecutorEnv::builder()
+        .write(&model_bytes)?
+        .build()?;
+
+    // Run prover
+    let prover = default_prover();
+    let prove_info = prover.prove(env, GUEST_CODE_FOR_ZK_PROOF_ELF)?;
+
+    // Decode predicted results from the journal
+    let predicted_classes: Vec<u32> = prove_info.receipt.journal.decode()?;
+    println!("Predicted classes: {:?}", predicted_classes);
+
+    // Verify proof
+    prove_info.receipt.verify(GUEST_CODE_FOR_ZK_PROOF_ID)?;
+    println!("Proof verified successfully!");
+
+    // --- Compare actual vs predicted ---
+    println!("\n--- Results ---");
+    for (i, (actual, predicted)) in actual_classes.iter().zip(predicted_classes.iter()).enumerate() {
+        println!("Sample {} => Actual: {}, Predicted: {}", i, actual, predicted);
+    }
+
     Ok(())
 }
