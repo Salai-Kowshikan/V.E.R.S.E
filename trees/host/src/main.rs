@@ -84,41 +84,71 @@
 //     Ok(())
 // }
 
-
-
-use methods::{GUEST_CODE_FOR_ZK_PROOF_ELF, GUEST_CODE_FOR_ZK_PROOF_ID};
-use risc0_zkvm::{default_prover, ExecutorEnv};
 use std::fs;
+use serde::{Serialize, Deserialize};
+use bincode;
+use risc0_zkvm::{default_prover, ExecutorEnv};
+use risc0_zkvm::serde::to_vec;
+use methods::{GUEST_CODE_FOR_ZK_PROOF_ELF, GUEST_CODE_FOR_ZK_PROOF_ID};
+
+// Host-side Node struct (must match guest)
+#[repr(C)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub struct Node {
+    pub feature_index: u32,
+    pub threshold: f32,
+    pub left: i32,
+    pub right: i32,
+    pub class_label: i32,
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 1️⃣ Load serialized model nodes
     let model_path = "iris_tree_nodes.bin";
-    let model_bytes = fs::read(model_path)?;
+    let file_bytes = fs::read(model_path)?;
+    println!("File size: {} bytes", file_bytes.len());
+    println!("First 32 bytes: {:?}", &file_bytes[..32.min(file_bytes.len())]);
 
-    // Example ground truth labels (replace with your dataset labels)
-    let actual_classes: Vec<u32> = vec![0, 1, 2, 1, 0]; 
+    let nodes: Vec<Node> = match bincode::deserialize(&file_bytes) {
+        Ok(nodes) => nodes,
+        Err(e) => {
+            eprintln!("Failed to deserialize nodes: {:?}", e);
+            return Err(Box::new(e));
+        }
+    };
+    println!("Deserialized {} nodes", nodes.len());
 
-    // Build environment and send model bytes
+    // 2️⃣ Serialize nodes for guest
+    let serialized_nodes = to_vec(&nodes)?;
+
+    // 3️⃣ Build guest execution environment
     let env = ExecutorEnv::builder()
-        .write(&model_bytes)?
+        .write(&serialized_nodes)?
         .build()?;
 
-    // Run prover
+    // 4️⃣ Run prover
     let prover = default_prover();
     let prove_info = prover.prove(env, GUEST_CODE_FOR_ZK_PROOF_ELF)?;
 
-    // Decode predicted results from the journal
+    // 5️⃣ Decode predictions from guest
     let predicted_classes: Vec<u32> = prove_info.receipt.journal.decode()?;
-    println!("Predicted classes: {:?}", predicted_classes);
+    println!("Predicted classes from guest: {:?}", predicted_classes);
 
-    // Verify proof
+    // 6️⃣ Compare with expected values
+    let expected_classes = [0, 1, 2, 2, 0]; // Change according to your validation set
+    for (i, &pred) in predicted_classes.iter().enumerate() {
+        println!(
+            "Sample {}: Predicted = {}, Expected = {} => {}",
+            i + 1,
+            pred,
+            expected_classes[i],
+            if pred == expected_classes[i] { "✅" } else { "❌" }
+        );
+    }
+
+    // 7️⃣ Verify ZK proof
     prove_info.receipt.verify(GUEST_CODE_FOR_ZK_PROOF_ID)?;
     println!("Proof verified successfully!");
-
-    // --- Compare actual vs predicted ---
-    println!("\n--- Results ---");
-    for (i, (actual, predicted)) in actual_classes.iter().zip(predicted_classes.iter()).enumerate() {
-        println!("Sample {} => Actual: {}, Predicted: {}", i, actual, predicted);
-    }
 
     Ok(())
 }

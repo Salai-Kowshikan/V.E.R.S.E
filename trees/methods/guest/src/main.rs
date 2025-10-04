@@ -147,9 +147,7 @@ use alloc::vec::Vec;
 use risc0_zkvm::guest::env;
 use serde::{Serialize, Deserialize};
 
-
-#[repr(C)]
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Node {
     pub feature_index: u32,
     pub threshold: f32,
@@ -165,8 +163,6 @@ const VALIDATION_DATA: [[f32; 4]; 5] = [
     [5.8, 2.7, 5.1, 1.9],
     [5.0, 3.4, 1.5, 0.2],
 ];
-
-const VALIDATION_LABELS: [i32; 5] = [0, 1, 2, 2, 0];
 
 fn eval_tree(sample: &[f32; 4], nodes: &Vec<Node>) -> i32 {
     let mut idx = 0;
@@ -186,13 +182,14 @@ fn eval_tree(sample: &[f32; 4], nodes: &Vec<Node>) -> i32 {
 risc0_zkvm::guest::entry!(main);
 
 fn main() {
-    // Deserialize model nodes from host
+    // Directly read, no unwrap
     let nodes: Vec<Node> = env::read::<Vec<Node>>();
 
-    for (i, sample) in VALIDATION_DATA.iter().enumerate() {
+    let mut predictions = Vec::new();
+    for sample in VALIDATION_DATA.iter() {
         let predicted = eval_tree(sample, &nodes);
-        let actual = VALIDATION_LABELS[i];
-        env::commit_slice(&[predicted as u32]);
-        env::commit_slice(&[actual as u32]);
+        predictions.push(predicted as u32);
     }
+
+    env::commit_slice(&predictions);
 }
