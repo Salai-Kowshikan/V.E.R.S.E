@@ -8,3 +8,7 @@ risc0-build = { version = "^3.0.3" }
 
 [package.metadata.risc0]
 methods = ["guest"]
+
+[dependencies]
+serde = "1.0"
+serde_json = "1.0"
