@@ -1,6 +1,6 @@
 from fastapi import FastAPI, status, Request
 from fastapi.responses import JSONResponse
-from routes import index, user
+from routes import index, user, model
 from middleware.logger import log_requests
 from config.db import init_db, close_db
 from config.settings import settings
@@ -29,6 +29,7 @@ app.middleware("http")(log_requests)
 # Routers
 app.include_router(index.router, prefix="/api", tags=["General"])
 app.include_router(user.router, prefix="/api/users", tags=["Users"])
+app.include_router(model.router, prefix="/api/model", tags=["Models"])
 
 # Root route
 @app.get("/")
