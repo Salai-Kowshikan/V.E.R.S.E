@@ -84,6 +84,9 @@
 //     Ok(())
 // }
 
+
+use std::env;
+use std::path::Path;
 use std::fs;
 use serde::{Serialize, Deserialize};
 use bincode;
@@ -106,6 +109,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1️⃣ Load serialized model nodes
     let model_path = "iris_tree_nodes.bin";
     let file_bytes = fs::read(model_path)?;
+
+    // 🔍 Debug prints before reading
+    println!("🔹 Current working directory: {:?}", env::current_dir()?);
+    println!("🔹 Trying to read file from path: {}", model_path);
+
+    // Check if file exists
+    if !Path::new(model_path).exists() {
+        println!("⚠️ File not found at: {}", model_path);
+        println!("💡 Try placing it in the same directory as your executable or use an absolute path.");
+        return Ok(()); 
+    }
+
     println!("File size: {} bytes", file_bytes.len());
     println!("First 32 bytes: {:?}", &file_bytes[..32.min(file_bytes.len())]);
 
@@ -152,3 +167,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+    
