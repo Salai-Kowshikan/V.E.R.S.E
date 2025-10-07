@@ -6,6 +6,8 @@ from config.db import init_db, close_db
 from config.settings import settings
 from contextlib import asynccontextmanager
 
+from utils.file import test_r2_operations
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,3 +48,5 @@ def catch_all(full_path: str):
         status_code=status.HTTP_404_NOT_FOUND,
         content={"message": "Route not found", "path": full_path}
     )
+
+#test_r2_operations()
