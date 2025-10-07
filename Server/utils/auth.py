@@ -1,11 +1,13 @@
-from fastapi import security
+from fastapi.security import HTTPBearer
 import jwt
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import Depends, HTTPException, status
-from fastapi.security import  HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials
 from config.settings import settings
 from models.user import User
+
+security = HTTPBearer()
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token"""
