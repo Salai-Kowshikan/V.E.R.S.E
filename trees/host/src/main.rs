@@ -84,14 +84,99 @@
 //     Ok(())
 // }
 
+
+// use std::env;
+// use std::path::Path;
+// use std::fs;
+// use serde::{Serialize, Deserialize};
+// use bincode;
+// use risc0_zkvm::{default_prover, ExecutorEnv};
+// use risc0_zkvm::serde::to_vec;
+// use methods::{GUEST_CODE_FOR_ZK_PROOF_ELF, GUEST_CODE_FOR_ZK_PROOF_ID};
+
+// // Host-side Node struct (must match guest)
+// #[repr(C)]
+// #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+// pub struct Node {
+//     pub feature_index: u32,
+//     pub threshold: f32,
+//     pub left: i32,
+//     pub right: i32,
+//     pub class_label: i32,
+// }
+
+// fn main() -> Result<(), Box<dyn std::error::Error>> {
+//     // 1️⃣ Load serialized model nodes
+//     let model_path = "iris_tree_nodes.bin";
+//     let file_bytes = fs::read(model_path)?;
+
+//     // 🔍 Debug prints before reading
+//     println!("🔹 Current working directory: {:?}", env::current_dir()?);
+//     println!("🔹 Trying to read file from path: {}", model_path);
+
+//     // Check if file exists
+//     if !Path::new(model_path).exists() {
+//         println!("⚠️ File not found at: {}", model_path);
+//         println!("💡 Try placing it in the same directory as your executable or use an absolute path.");
+//         return Ok(()); 
+//     }
+
+//     println!("File size: {} bytes", file_bytes.len());
+//     println!("First 32 bytes: {:?}", &file_bytes[..32.min(file_bytes.len())]);
+
+//     let nodes: Vec<Node> = match bincode::deserialize(&file_bytes) {
+//         Ok(nodes) => nodes,
+//         Err(e) => {
+//             eprintln!("Failed to deserialize nodes: {:?}", e);
+//             return Err(Box::new(e));
+//         }
+//     };
+//     println!("Deserialized {} nodes", nodes.len());
+
+//     // 2️⃣ Serialize nodes for guest
+//     let serialized_nodes = to_vec(&nodes)?;
+
+//     // 3️⃣ Build guest execution environment
+//     let env = ExecutorEnv::builder()
+//         .write(&serialized_nodes)?
+//         .build()?;
+
+//     // 4️⃣ Run prover
+//     let prover = default_prover();
+//     let prove_info = prover.prove(env, GUEST_CODE_FOR_ZK_PROOF_ELF)?;
+
+//     // 5️⃣ Decode predictions from guest
+//     let predicted_classes: Vec<u32> = prove_info.receipt.journal.decode()?;
+//     println!("Predicted classes from guest: {:?}", predicted_classes);
+
+//     // 6️⃣ Compare with expected values
+//     let expected_classes = [0, 1, 2, 2, 0]; // Change according to your validation set
+//     for (i, &pred) in predicted_classes.iter().enumerate() {
+//         println!(
+//             "Sample {}: Predicted = {}, Expected = {} => {}",
+//             i + 1,
+//             pred,
+//             expected_classes[i],
+//             if pred == expected_classes[i] { "✅" } else { "❌" }
+//         );
+//     }
+
+//     // 7️⃣ Verify ZK proof
+//     prove_info.receipt.verify(GUEST_CODE_FOR_ZK_PROOF_ID)?;
+//     println!("Proof verified successfully!");
+
+//     Ok(())
+// }
+    
+use std::env;
+use std::path::Path;
 use std::fs;
+use std::mem;
+
 use serde::{Serialize, Deserialize};
-use bincode;
 use risc0_zkvm::{default_prover, ExecutorEnv};
-use risc0_zkvm::serde::to_vec;
 use methods::{GUEST_CODE_FOR_ZK_PROOF_ELF, GUEST_CODE_FOR_ZK_PROOF_ID};
 
-// Host-side Node struct (must match guest)
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Node {
@@ -102,51 +187,86 @@ pub struct Node {
     pub class_label: i32,
 }
 
+fn parse_nodes_from_raw(file_bytes: &[u8]) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
+    let node_size = mem::size_of::<Node>(); // 20
+    if file_bytes.len() % node_size != 0 {
+        eprintln!("⚠️ Warning: file size {} is not a multiple of node size {}", file_bytes.len(), node_size);
+    }
+
+    let mut nodes = Vec::new();
+    for chunk in file_bytes.chunks_exact(node_size) {
+        let feature_index = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
+        let threshold = f32::from_le_bytes(chunk[4..8].try_into().unwrap());
+        let left = i32::from_le_bytes(chunk[8..12].try_into().unwrap());
+        let right = i32::from_le_bytes(chunk[12..16].try_into().unwrap());
+        let class_label = i32::from_le_bytes(chunk[16..20].try_into().unwrap());
+
+        nodes.push(Node {
+            feature_index,
+            threshold,
+            left,
+            right,
+            class_label,
+        });
+    }
+
+    Ok(nodes)
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1️⃣ Load serialized model nodes
     let model_path = "iris_tree_nodes.bin";
-    let file_bytes = fs::read(model_path)?;
-    println!("File size: {} bytes", file_bytes.len());
-    println!("First 32 bytes: {:?}", &file_bytes[..32.min(file_bytes.len())]);
 
-    let nodes: Vec<Node> = match bincode::deserialize(&file_bytes) {
-        Ok(nodes) => nodes,
-        Err(e) => {
-            eprintln!("Failed to deserialize nodes: {:?}", e);
-            return Err(Box::new(e));
-        }
-    };
-    println!("Deserialized {} nodes", nodes.len());
+    println!("🔹 Current working directory: {:?}", env::current_dir()?);
+    println!("🔹 Trying to read file from path: {}", model_path);
 
-    // 2️⃣ Serialize nodes for guest
-    let serialized_nodes = to_vec(&nodes)?;
+    if !Path::new(model_path).exists() {
+        println!("⚠️ File not found at: {}", model_path);
+        return Ok(());
+    }
 
-    // 3️⃣ Build guest execution environment
+    // Read the raw bytes exactly as Python wrote them
+    let raw_bytes = fs::read(model_path)?;
+    println!("File size: {} bytes", raw_bytes.len());
+    println!("First 32 bytes: {:?}", &raw_bytes[..32.min(raw_bytes.len())]);
+
+    // Parse & print nodes locally (for debugging)
+    let nodes = parse_nodes_from_raw(&raw_bytes)?;
+    println!("Parsed {} nodes", nodes.len());
+    for (i, node) in nodes.iter().enumerate() {
+        println!(
+            "Node {}: feature_index={}, threshold={}, left={}, right={}, class_label={}",
+            i, node.feature_index, node.threshold, node.left, node.right, node.class_label
+        );
+    }
+
+    // --- Send raw bytes to guest (guest will parse them) ---
+    // Write the raw bytes (Vec<u8>) to guest input. Guest should call env::read::<Vec<u8>>()
     let env = ExecutorEnv::builder()
-        .write(&serialized_nodes)?
+        .write(&raw_bytes)?   // the guest will receive the raw binary bytes
         .build()?;
 
-    // 4️⃣ Run prover
+    // Run prover
     let prover = default_prover();
     let prove_info = prover.prove(env, GUEST_CODE_FOR_ZK_PROOF_ELF)?;
 
-    // 5️⃣ Decode predictions from guest
+    // Decode predictions from guest
     let predicted_classes: Vec<u32> = prove_info.receipt.journal.decode()?;
     println!("Predicted classes from guest: {:?}", predicted_classes);
 
-    // 6️⃣ Compare with expected values
-    let expected_classes = [0, 1, 2, 2, 0]; // Change according to your validation set
+    // Compare with expected
+    let expected_classes = [0, 1, 2, 2, 0];
     for (i, &pred) in predicted_classes.iter().enumerate() {
+        let expected = expected_classes.get(i).copied().unwrap_or_default();
         println!(
             "Sample {}: Predicted = {}, Expected = {} => {}",
             i + 1,
             pred,
-            expected_classes[i],
-            if pred == expected_classes[i] { "✅" } else { "❌" }
+            expected,
+            if pred == expected { "✅" } else { "❌" }
         );
     }
 
-    // 7️⃣ Verify ZK proof
+    // Verify proof
     prove_info.receipt.verify(GUEST_CODE_FOR_ZK_PROOF_ID)?;
     println!("Proof verified successfully!");
 
