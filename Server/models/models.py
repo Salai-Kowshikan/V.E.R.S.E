@@ -1,15 +1,13 @@
-from beanie import Document, Link, Indexed
+from beanie import Document, Link
 from typing import Optional
 from datetime import datetime
 from enum import Enum
-from pydantic import Field, validator
+from pydantic import Field
 from .user import User
 
 class ValidationStatus(str, Enum):
     PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
 
 class Model(Document):
     userId: Link[User]

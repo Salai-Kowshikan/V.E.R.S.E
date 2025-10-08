@@ -50,6 +50,8 @@ class ValidationRequestUpdate(BaseModel):
 class ModelWithValidationsResponse(BaseModel):
     id: str
     userId: str
+    name: str
+    description: Optional[str] = None
     vectorFormat: Optional[str] = None
     createdAt: datetime
     updatedAt: datetime

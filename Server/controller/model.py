@@ -3,7 +3,7 @@ from models.user import User
 from schemas.model import (
     ModelCreate, ModelResponse, 
     ValidationRequestResponse, ModelWithValidationsResponse,
-    UserModelsWithValidationsResponse
+    UserModelsWithValidationsResponse, ValidationStatus 
 )
 from fastapi import HTTPException, status, UploadFile
 from typing import List
@@ -227,6 +227,8 @@ async def get_model_validation_requests(model_id: str, current_user: User) -> Li
                 modelId=str(vr.modelId.ref.id),
                 verifierId=str(vr.verifierId.ref.id),
                 elfFileUrl=vr.elfFileUrl,
+                jsonUrl=vr.jsonUrl,
+                proofHash=vr.proofHash,
                 status=vr.status,
                 createdAt=vr.createdAt,
             )
@@ -263,6 +265,8 @@ async def get_user_models_with_validations(current_user: User) -> UserModelsWith
                     modelId=str(vr.modelId.ref.id),
                     verifierId=str(vr.verifierId.ref.id),
                     elfFileUrl=vr.elfFileUrl,
+                    jsonUrl=vr.jsonUrl,
+                    proofHash=vr.proofHash,
                     status=vr.status,
                     createdAt=vr.createdAt
                 )
@@ -290,4 +294,133 @@ async def get_user_models_with_validations(current_user: User) -> UserModelsWith
             detail=f"Failed to retrieve models with validations: {str(e)}"
         )
 
+async def add_proof_to_validation(validation_request_id: str, json_file: UploadFile, current_user: User) -> ValidationRequestResponse:
+    """Append JSON proof file to an existing validation request"""
+    try:
+        print(f"Starting add_proof_to_validation for validation_request_id: {validation_request_id}")
+        print(f"Current user ID: {current_user.id}")
+        print(f"JSON file name: {json_file.filename}")
+        
+        # Find the validation request by ID using find_one to get raw data first
+        print("_____")
+        validation_request_doc = await ValidationRequest.find_one(ValidationRequest.id == PydanticObjectId(validation_request_id))
+        if not validation_request_doc:
+            print(f"Validation request not found for ID: {validation_request_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Validation request not found"
+            )
+        
+        print(f"Found validation request: {validation_request_doc.id}")
+        print(f"Validation request verifier ID: {validation_request_doc.verifierId.ref.id}")
+        
+        # Ensure the current user is the verifier for this request
+        if str(validation_request_doc.verifierId.ref.id) != str(current_user.id):
+            print(f"User mismatch - Verifier: {validation_request_doc.verifierId.ref.id}, Current user: {current_user.id}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only add proof to your own validation requests"
+            )
+        
+        print("User authorization successful")
+        
+        # Validate file type (optional - you can add specific validations)
+        # if not json_file.filename.endswith('.json'):
+        #     raise HTTPException(
+        #         status_code=status.HTTP_400_BAD_REQUEST,
+        #         detail="File must be a JSON file"
+        #     )
+        
+        # Generate unique filename for R2
+        file_extension = os.path.splitext(json_file.filename)[1]
+        unique_filename = f"proof_files/{uuid.uuid4()}{file_extension}"
+        print(f"Generated unique filename: {unique_filename}")
+        
+        # Create temporary file to save uploaded content
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+            try:
+                print(f"Created temporary file: {temp_file.name}")
+                
+                # Read and write file content
+                content = await json_file.read()
+                print(f"Read {len(content)} bytes from uploaded file")
+                
+                temp_file.write(content)
+                temp_file.flush()
+                print("Content written to temporary file")
+                
+                # Upload to Cloudflare R2
+                print("Getting R2 manager...")
+                r2_manager = get_r2_manager()
+                
+                print("Uploading file to R2...")
+                success = add_file_to_r2(
+                    local_file_path=temp_file.name,
+                    r2_key=unique_filename,
+                    metadata={
+                        'original_filename': json_file.filename,
+                        'uploaded_by': str(current_user.id),
+                        'validation_request_id': str(validation_request_doc.id),
+                        'upload_date': datetime.utcnow().isoformat()
+                    },
+                    content_type='application/json',
+                    r2_manager=r2_manager
+                )
+                
+                print(f"R2 upload success: {success}")
+                
+                if not success:
+                    print("Failed to upload file to cloud storage")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to upload file to cloud storage"
+                    )
+                
+                # Construct file URL (adjust based on your R2 configuration)
+                file_url = f"{unique_filename}"
+                print(f"File URL: {file_url}")
+                
+            finally:
+                try:
+                    print(f"Cleaning up temporary file: {temp_file.name}")
+                    os.unlink(temp_file.name)
+                    print("Temporary file deleted successfully")
+                except OSError as e:
+                    print(f"Failed to delete temporary file: {e}")
+                    pass  # File already deleted or doesn't exist
+        
+        # Update the validation request with the JSON proof URL using a targeted update
+        print("Updating validation request with JSON URL...")
+        await ValidationRequest.find_one(ValidationRequest.id == validation_request_doc.id).update({
+            "$set": {"jsonUrl": file_url}
+        })
+        await ValidationRequest.find_one(ValidationRequest.id == validation_request_doc.id).update({
+            "$set": {"status": ValidationStatus.COMPLETED}
+        })
+        
+        # Refresh the validation request object to get the updated data
+        updated_validation_request = await ValidationRequest.find_one(ValidationRequest.id == validation_request_doc.id)
+        print("Validation request updated successfully")
 
+        response = ValidationRequestResponse(
+            id=str(updated_validation_request.id),
+            modelId=str(updated_validation_request.modelId.ref.id),
+            verifierId=str(updated_validation_request.verifierId.ref.id),
+            elfFileUrl=updated_validation_request.elfFileUrl,
+            jsonUrl=updated_validation_request.jsonUrl,
+            proofHash=getattr(updated_validation_request, 'proofHash', ''),  # Handle missing proofHash
+            status=updated_validation_request.status,
+            createdAt=updated_validation_request.createdAt,
+        )
+        print(f"Returning response: {response}")
+        return response
+        
+    except HTTPException:
+        print("HTTPException caught, re-raising")
+        raise
+    except Exception as e:
+        print(f"Unexpected error in add_proof_to_validation: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to add proof to validation request: {str(e)}"
+        )
