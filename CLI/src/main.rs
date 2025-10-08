@@ -66,8 +66,8 @@ fn save_auth(auth: &AuthStore) -> std::io::Result<()> {
 fn main() {
     let matches = Command::new("verse")
         .version("1.0")
-        .author("Your Name <your.email@example.com>")
-        .about("A simple CLI tool built with clap")
+        .author("Salai Kowshikan")
+        .about("This is V.E.R.S.E, a command line tool to provide a model validation interface that protects the privacy of both the parties involved.")
         .arg(
             Arg::new("name")
                 .short('n')
@@ -77,7 +77,7 @@ fn main() {
         )
         .subcommand(
             Command::new("request")
-                .about("Run `cargo run --release` in the ZK-guest workspace")
+                .about("Makes a validation request to the provided model owner")
                 .arg(
                     Arg::new("dir")
                         .short('d')
@@ -89,7 +89,7 @@ fn main() {
         )
         .subcommand(
             Command::new("register")
-                .about("Register a new user on the FastAPI server")
+                .about("Register a new user on V.E.R.S.E")
                 .arg(
                     Arg::new("email")
                         .help("Email address to register")
@@ -105,7 +105,7 @@ fn main() {
         )
         .subcommand(
             Command::new("login")
-                .about("Login and store JWT for subsequent commands")
+                .about("Log into V.E.R.S.E")
                 .arg(
                     Arg::new("email")
                         .help("Email address")
@@ -161,7 +161,6 @@ fn main() {
                 .map(String::as_str)
                 .expect("password is required");
 
-            // Default server URL; adjust if your API runs elsewhere
             let url = std::env::var("VERSE_API_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
             let endpoint = format!("{}/api/users/register", url.trim_end_matches('/'));
@@ -264,11 +263,7 @@ fn main() {
             }
         }
         _ => {
-            if let Some(name) = matches.get_one::<String>("name") {
-                println!("Hello, {}!", name);
-            } else {
-                println!("Hello, world!");
-            }
+            println!("This is V.E.R.S.E, a command line tool to provide a model validation interface that protects the privacy of both the parties involved. Use --help for more information.");
         }
     }
 }

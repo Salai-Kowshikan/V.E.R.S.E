@@ -12,11 +12,9 @@ require_cmd() {
 	fi
 }
 
-# Core tools needed to build a Rust binary
 require_cmd cargo
 require_cmd rustc
 
-# A C linker is needed by Rust crates during linking
 if ! command -v cc >/dev/null 2>&1 && ! command -v gcc >/dev/null 2>&1 && ! command -v clang >/dev/null 2>&1; then
 	echo "Error: no C compiler/linker found (cc/gcc/clang)." >&2
 	missing=1
@@ -52,28 +50,23 @@ fi
 # --- Build the binary in release mode --------------------------------------
 cargo build --release
 
-# Define paths
 BINARY_NAME="verse"
 BINARY_PATH="target/release/$BINARY_NAME"
 RELEASE_DIR="release/latest"
 TARBALL_NAME="$BINARY_NAME.tar.gz"
 
-# Create release directory if it doesn't exist
 mkdir -p "$RELEASE_DIR"
 
-# Copy the binary to a temp location for packaging
 cp "$BINARY_PATH" "$RELEASE_DIR/$BINARY_NAME"
 
-# Create the tarball (overwrite if exists)
 tar -czf "$RELEASE_DIR/$TARBALL_NAME" -C "$RELEASE_DIR" "$BINARY_NAME"
 
-# Remove the copied binary, keep only the tarball
 rm "$RELEASE_DIR/$BINARY_NAME"
 
 echo "Tarball created at $RELEASE_DIR/$TARBALL_NAME"
 
 # --- Install the binary into PATH -----------------------------------------
-# Default install location mirrors install-verse.sh; can be overridden with INSTALL_DIR env var
+
 DEFAULT_SYSTEM_DIR="/usr/bin"
 USER_BIN="$HOME/.local/bin"
 INSTALL_TO="${INSTALL_DIR:-$DEFAULT_SYSTEM_DIR}"
