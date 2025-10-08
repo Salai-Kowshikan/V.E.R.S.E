@@ -71,3 +71,33 @@ tar -czf "$RELEASE_DIR/$TARBALL_NAME" -C "$RELEASE_DIR" "$BINARY_NAME"
 rm "$RELEASE_DIR/$BINARY_NAME"
 
 echo "Tarball created at $RELEASE_DIR/$TARBALL_NAME"
+
+# --- Install the binary into PATH -----------------------------------------
+# Default install location mirrors install-verse.sh; can be overridden with INSTALL_DIR env var
+DEFAULT_SYSTEM_DIR="/usr/bin"
+USER_BIN="$HOME/.local/bin"
+INSTALL_TO="${INSTALL_DIR:-$DEFAULT_SYSTEM_DIR}"
+
+echo "Installing $BINARY_NAME to PATH..."
+
+install_to_user_bin() {
+	mkdir -p "$USER_BIN"
+	install -m 0755 "$BINARY_PATH" "$USER_BIN/$BINARY_NAME"
+	echo "Installed $BINARY_NAME to $USER_BIN"
+	if ! echo ":$PATH:" | grep -q ":$USER_BIN:"; then
+		echo "Note: $USER_BIN is not in PATH. Add this to your shell profile (e.g., ~/.bashrc):"
+		echo "  export PATH=\"$USER_BIN:\$PATH\""
+	fi
+}
+
+if [[ -w "$INSTALL_TO" ]]; then
+	install -m 0755 "$BINARY_PATH" "$INSTALL_TO/$BINARY_NAME"
+	echo "Installed $BINARY_NAME to $INSTALL_TO"
+elif command -v sudo >/dev/null 2>&1; then
+	echo "Using sudo to install to $INSTALL_TO"
+	sudo install -m 0755 "$BINARY_PATH" "$INSTALL_TO/$BINARY_NAME"
+	echo "Installed $BINARY_NAME to $INSTALL_TO"
+else
+	echo "No write access to $INSTALL_TO and 'sudo' not available. Installing to $USER_BIN instead."
+	install_to_user_bin
+fi
