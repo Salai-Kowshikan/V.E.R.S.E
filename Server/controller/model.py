@@ -1,12 +1,12 @@
 from models.models import Model, ValidationRequest, ValidationStatus
 from models.user import User
 from schemas.model import (
-    ModelCreate, ModelResponse, ValidationRequestCreate, 
+    ModelCreate, ModelResponse, 
     ValidationRequestResponse, ModelWithValidationsResponse,
-    UserModelsWithValidationsResponse, ValidationRequestUpdate
+    UserModelsWithValidationsResponse
 )
 from fastapi import HTTPException, status, UploadFile
-from typing import Dict, Any, List
+from typing import List
 from beanie import PydanticObjectId
 from datetime import datetime
 import uuid
@@ -43,7 +43,7 @@ async def create_model(model_data: ModelCreate, current_user: User) -> ModelResp
         )
 
 async def get_user_models(current_user: User):
-    """Get all models for the authenticated user"""
+    """Get all models by user"""
     try:
         models = await Model.find(Model.userId.id == current_user.id).to_list()
         return [
@@ -56,6 +56,28 @@ async def get_user_models(current_user: User):
             )
             for model in models
         ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve models: {str(e)}"
+        )
+
+
+async def get_all_models_controller():
+    """Get all models """
+    try:
+        models = await Model.find().to_list()
+        return [
+            ModelResponse(
+                id=str(model.id),
+                userId=str(model.userId.ref.id),
+                vectorFormat=model.vectorFormat,
+                createdAt=model.createdAt,
+                updatedAt=model.updatedAt
+            )
+            for model in models
+        ]
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

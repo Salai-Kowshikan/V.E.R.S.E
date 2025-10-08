@@ -1,8 +1,4 @@
-import jwt
-from datetime import datetime, timedelta
-from typing import Optional
 from passlib.context import CryptContext
-from config.settings import settings
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

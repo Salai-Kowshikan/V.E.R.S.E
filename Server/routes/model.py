@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File, Form
 from controller.model import (
     create_model, get_user_models,  get_model_validation_requests, get_user_models_with_validations,
-    create_validation_request_with_file
+    create_validation_request_with_file, get_all_models_controller
 )
 from schemas.model import (
     ModelCreate, ModelResponse, 
@@ -21,6 +21,14 @@ async def create_new_model(
 ):
     """Create a new model for the authenticated user"""
     return await create_model(model_data, current_user)
+
+@router.get("/",response_model=List[ModelResponse])
+async def get_all_models(
+    current_user: User = Depends(get_current_user)
+):
+    """Get all models for the authenticated user"""
+    return await get_all_models_controller()
+
 
 
 @router.get("", response_model=List[ModelResponse])

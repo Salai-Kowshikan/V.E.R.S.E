@@ -1,12 +1,10 @@
-from fastapi import FastAPI, status, Request
+from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 from routes import index, user, model
 from middleware.logger import log_requests
 from config.db import init_db, close_db
 from config.settings import settings
 from contextlib import asynccontextmanager
-
-from utils.file import test_r2_operations
 
 
 @asynccontextmanager
@@ -40,7 +38,7 @@ def read_main_root():
         status_code=status.HTTP_200_OK,
         content={"message": "Welcome welcome!! VERSE API"}
     )
-#hey you
+
 # Catch-all route
 @app.get("/{full_path:path}")
 def catch_all(full_path: str):
@@ -48,5 +46,3 @@ def catch_all(full_path: str):
         status_code=status.HTTP_404_NOT_FOUND,
         content={"message": "Route not found", "path": full_path}
     )
-
-#test_r2_operations()
