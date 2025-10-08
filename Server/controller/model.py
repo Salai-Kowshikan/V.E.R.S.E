@@ -1,8 +1,18 @@
-from models.models import Model
+from models.models import Model, ValidationRequest, ValidationStatus
 from models.user import User
-from schemas.model import ModelCreate, ModelResponse
-from fastapi import HTTPException, status
-from typing import Dict, Any
+from schemas.model import (
+    ModelCreate, ModelResponse, ValidationRequestCreate, 
+    ValidationRequestResponse, ModelWithValidationsResponse,
+    UserModelsWithValidationsResponse, ValidationRequestUpdate
+)
+from fastapi import HTTPException, status, UploadFile
+from typing import Dict, Any, List
+from beanie import PydanticObjectId
+from datetime import datetime
+import uuid
+import tempfile
+import os
+from utils.file import get_r2_manager, add_file_to_r2
 
 async def create_model(model_data: ModelCreate, current_user: User) -> ModelResponse:
     """Create a new model for the authenticated user"""
@@ -19,7 +29,9 @@ async def create_model(model_data: ModelCreate, current_user: User) -> ModelResp
         return ModelResponse(
             id=str(model.id),
             userId=str(current_user.id),
-            vectorFormat=model.vectorFormat
+            vectorFormat=model.vectorFormat,
+            createdAt=model.createdAt,
+            updatedAt=model.updatedAt
         )
         
     except Exception as e:
@@ -36,7 +48,9 @@ async def get_user_models(current_user: User):
             ModelResponse(
                 id=str(model.id),
                 userId=str(current_user.id),
-                vectorFormat=model.vectorFormat
+                vectorFormat=model.vectorFormat,
+                createdAt=model.createdAt,
+                updatedAt=model.updatedAt
             )
             for model in models
         ]
@@ -44,4 +58,352 @@ async def get_user_models(current_user: User):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve models: {str(e)}"
+        )
+
+async def create_validation_request(
+    validation_data: ValidationRequestCreate, 
+    current_user: User,
+    elf_file_url: str
+) -> ValidationRequestResponse:
+    """Create a new validation request"""
+    try:
+        # Verify the model exists
+        model = await Model.get(validation_data.modelId)
+        if not model:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Model not found"
+            )
+        
+        # Prevent users from creating validation requests for their own models
+        if str(model.userId.id) == str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot create validation requests for your own models"
+            )
+        
+        # Create validation request with current user as verifier
+        validation_request = ValidationRequest(
+            modelId=model,
+            verifierId=current_user,
+            elfFileUrl=elf_file_url,
+            comments=validation_data.comments
+        )
+        
+        await validation_request.insert()
+        
+        return ValidationRequestResponse(
+            id=str(validation_request.id),
+            modelId=str(validation_request.modelId.id),
+            verifierId=str(validation_request.verifierId.id),
+            elfFileUrl=validation_request.elfFileUrl,
+            status=validation_request.status,
+            createdAt=validation_request.createdAt,
+            verifiedAt=validation_request.verifiedAt,
+            comments=validation_request.comments
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create validation request: {str(e)}"
+        )
+
+async def create_validation_request_with_file(
+    model_id: str,
+    elf_file: UploadFile,
+    current_user: User,
+    comments: str = None
+) -> ValidationRequestResponse:
+    """Create a new validation request with ELF file upload"""
+    try:
+        # Verify the model exists
+        model = await Model.get(model_id)
+        if not model:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Model not found"
+            )
+        
+        # Prevent users from creating validation requests for their own models
+        if str(model.userId.id) == str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot create validation requests for your own models"
+            )
+        
+        # Validate file type (optional - you can add specific validations)
+        if not elf_file.filename.endswith('.elf'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File must be an ELF file"
+            )
+        
+        # Generate unique filename for R2
+        file_extension = os.path.splitext(elf_file.filename)[1]
+        unique_filename = f"elf_files/{uuid.uuid4()}{file_extension}"
+        
+        # Create temporary file to save uploaded content
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+            try:
+                # Read and write file content
+                content = await elf_file.read()
+                temp_file.write(content)
+                temp_file.flush()
+                
+                # Upload to Cloudflare R2
+                r2_manager = get_r2_manager()
+                success = add_file_to_r2(
+                    local_file_path=temp_file.name,
+                    r2_key=unique_filename,
+                    metadata={
+                        'original_filename': elf_file.filename,
+                        'uploaded_by': str(current_user.id),
+                        'model_id': model_id,
+                        'upload_date': datetime.utcnow().isoformat()
+                    },
+                    content_type='application/octet-stream',
+                    r2_manager=r2_manager
+                )
+                
+                if not success:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to upload file to cloud storage"
+                    )
+                
+                # Construct file URL (adjust based on your R2 configuration)
+                file_url = f"https://{r2_manager.bucket_name}.{r2_manager.account_id}.r2.cloudflarestorage.com/{unique_filename}"
+                
+            finally:
+                # Clean up temporary file
+                try:
+                    os.unlink(temp_file.name)
+                except OSError:
+                    pass  # File already deleted or doesn't exist
+        
+        # Create validation request with current user as verifier
+        validation_request = ValidationRequest(
+            modelId=model,
+            verifierId=current_user,
+            elfFileUrl=file_url,
+            comments=comments
+        )
+        
+        await validation_request.insert()
+        
+        return ValidationRequestResponse(
+            id=str(validation_request.id),
+            modelId=str(validation_request.modelId.id),
+            verifierId=str(validation_request.verifierId.id),
+            elfFileUrl=validation_request.elfFileUrl,
+            status=validation_request.status,
+            createdAt=validation_request.createdAt,
+            verifiedAt=validation_request.verifiedAt,
+            comments=validation_request.comments
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create validation request: {str(e)}"
+        )
+
+async def get_model_validation_requests(model_id: str, current_user: User) -> List[ValidationRequestResponse]:
+    """Get all validation requests for a specific model"""
+    try:
+        # Verify the model exists and belongs to the current user
+        model = await Model.get(model_id)
+        if not model:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Model not found"
+            )
+        
+        if str(model.userId.id) != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view validation requests for your own models"
+            )
+        
+        # Get validation requests for this model
+        validation_requests = await ValidationRequest.find(
+            ValidationRequest.modelId.id == PydanticObjectId(model_id)
+        ).to_list()
+        
+        return [
+            ValidationRequestResponse(
+                id=str(vr.id),
+                modelId=str(vr.modelId.id),
+                verifierId=str(vr.verifierId.id),
+                elfFileUrl=vr.elfFileUrl,
+                status=vr.status,
+                createdAt=vr.createdAt,
+                verifiedAt=vr.verifiedAt,
+                comments=vr.comments
+            )
+            for vr in validation_requests
+        ]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve validation requests: {str(e)}"
+        )
+
+async def get_user_models_with_validations(current_user: User) -> UserModelsWithValidationsResponse:
+    """Get all user models with their validation requests"""
+    try:
+        # Get user's models
+        models = await Model.find(Model.userId.id == current_user.id).to_list()
+        
+        models_with_validations = []
+        
+        for model in models:
+            # Get validation requests for each model
+            validation_requests = await ValidationRequest.find(
+                ValidationRequest.modelId.id == model.id
+            ).to_list()
+            
+            validation_responses = [
+                ValidationRequestResponse(
+                    id=str(vr.id),
+                    modelId=str(vr.modelId.id),
+                    verifierId=str(vr.verifierId.id),
+                    elfFileUrl=vr.elfFileUrl,
+                    status=vr.status,
+                    createdAt=vr.createdAt,
+                    verifiedAt=vr.verifiedAt,
+                    comments=vr.comments
+                )
+                for vr in validation_requests
+            ]
+            
+            models_with_validations.append(
+                ModelWithValidationsResponse(
+                    id=str(model.id),
+                    userId=str(model.userId.id),
+                    vectorFormat=model.vectorFormat,
+                    createdAt=model.createdAt,
+                    updatedAt=model.updatedAt,
+                    validationRequests=validation_responses
+                )
+            )
+        
+        return UserModelsWithValidationsResponse(models=models_with_validations)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve models with validations: {str(e)}"
+        )
+
+async def update_validation_request(
+    validation_id: str, 
+    update_data: ValidationRequestUpdate, 
+    current_user: User
+) -> ValidationRequestResponse:
+    """Update a validation request (only verifiers can update status)"""
+    try:
+        # Get the validation request
+        validation_request = await ValidationRequest.get(validation_id)
+        if not validation_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Validation request not found"
+            )
+        
+        # Check if current user is the verifier
+        if str(validation_request.verifierId.id) != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the assigned verifier can update this validation request"
+            )
+        
+        # Update fields
+        if update_data.status is not None:
+            validation_request.status = update_data.status
+            # Auto-set verifiedAt if status is approved/rejected
+            if update_data.status in [ValidationStatus.APPROVED, ValidationStatus.REJECTED]:
+                validation_request.verifiedAt = datetime.utcnow()
+        
+        if update_data.comments is not None:
+            validation_request.comments = update_data.comments
+        
+        # Save changes
+        await validation_request.save()
+        
+        return ValidationRequestResponse(
+            id=str(validation_request.id),
+            modelId=str(validation_request.modelId.id),
+            verifierId=str(validation_request.verifierId.id),
+            elfFileUrl=validation_request.elfFileUrl,
+            status=validation_request.status,
+            createdAt=validation_request.createdAt,
+            verifiedAt=validation_request.verifiedAt,
+            comments=validation_request.comments
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update validation request: {str(e)}"
+        )
+
+async def get_user_verification_requests(current_user: User) -> List[ValidationRequestResponse]:
+    """Get all validation requests assigned to the current user for verification"""
+    try:
+        validation_requests = await ValidationRequest.find(
+            ValidationRequest.verifierId.id == current_user.id
+        ).to_list()
+        
+        return [
+            ValidationRequestResponse(
+                id=str(vr.id),
+                modelId=str(vr.modelId.id),
+                verifierId=str(vr.verifierId.id),
+                elfFileUrl=vr.elfFileUrl,
+                status=vr.status,
+                createdAt=vr.createdAt,
+                verifiedAt=vr.verifiedAt,
+                comments=vr.comments
+            )
+            for vr in validation_requests
+        ]
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve verification requests: {str(e)}"
+        )
+
+async def get_models_available_for_validation(current_user: User) -> List[ModelResponse]:
+    """Get all models that the current user can create validation requests for (models owned by other users)"""
+    try:
+        # Get all models except those owned by the current user
+        models = await Model.find(Model.userId.id != current_user.id).to_list()
+        
+        return [
+            ModelResponse(
+                id=str(model.id),
+                userId=str(model.userId.id),
+                vectorFormat=model.vectorFormat,
+                createdAt=model.createdAt,
+                updatedAt=model.updatedAt
+            )
+            for model in models
+        ]
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve models available for validation: {str(e)}"
         )

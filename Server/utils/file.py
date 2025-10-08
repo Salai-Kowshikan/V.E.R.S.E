@@ -313,3 +313,67 @@ def get_file_info_from_r2(r2_key: str,
     except Exception as e:
         print(f"Unexpected error getting file info from R2: {e}")
         return None
+
+
+def test_r2_operations():
+    """
+    Example test for Cloudflare R2 operations.
+    Make sure your `config.settings` file has valid credentials and bucket info.
+    """
+    
+    # Example test values
+    test_local_file = "test_upload.txt"
+    test_r2_key = "test-folder/test_upload.txt"
+    downloaded_file = "downloaded_test_upload.txt"
+    # Create a sample file to upload
+    with open(test_local_file, "w") as f:
+        f.write("This is a test file for Cloudflare R2 integration.\n")
+
+    print("\n--- Cloudflare R2 Test Start ---\n")
+
+    try:
+        # Initialize R2 manager
+        r2_manager = get_r2_manager()
+        print("✅ Initialized R2 Manager")
+
+        # Upload file
+        print("\n📤 Uploading file...")
+        upload_success = add_file_to_r2(test_local_file, test_r2_key, r2_manager=r2_manager)
+        print(f"Upload Success: {upload_success}")
+
+        # Check file existence
+        print("\n🔍 Checking if file exists...")
+        exists = file_exists_in_r2(test_r2_key, r2_manager=r2_manager)
+        print(f"File Exists in R2: {exists}")
+
+        # Get file info
+        print("\n📄 Fetching file info...")
+        info = get_file_info_from_r2(test_r2_key, r2_manager=r2_manager)
+        print("File Info:", info)
+
+        # Download file
+        print("\n📥 Downloading file...")
+        download_success = download_file_from_r2(test_r2_key, downloaded_file, r2_manager=r2_manager)
+        print(f"Download Success: {download_success}")
+
+        # Remove file
+        print("\n🗑️ Removing file from R2...")
+        remove_success = remove_file_from_r2(test_r2_key, r2_manager=r2_manager)
+        print(f"Remove Success: {remove_success}")
+
+        # Final existence check
+        print("\n🔁 Rechecking if file still exists after delete...")
+        still_exists = file_exists_in_r2(test_r2_key, r2_manager=r2_manager)
+        print(f"File Exists After Delete: {still_exists}")
+
+    except Exception as e:
+        print(f"\n❌ Test failed: {e}")
+    finally:
+        # Cleanup local files
+        if os.path.exists(test_local_file):
+            os.remove(test_local_file)
+        if os.path.exists(downloaded_file):
+            os.remove(downloaded_file)
+
+        print("\n--- Cloudflare R2 Test Completed ---\n")
+

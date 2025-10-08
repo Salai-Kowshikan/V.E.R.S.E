@@ -139,6 +139,7 @@
 //     env::commit(&predicted_classes);
 // }
 
+
 #![no_std]
 #![no_main]
 
@@ -146,8 +147,9 @@ extern crate alloc;
 use alloc::vec::Vec;
 use risc0_zkvm::guest::env;
 use serde::{Serialize, Deserialize};
+use core::convert::TryInto;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Node {
     pub feature_index: u32,
     pub threshold: f32,
@@ -165,13 +167,14 @@ const VALIDATION_DATA: [[f32; 4]; 5] = [
 ];
 
 fn eval_tree(sample: &[f32; 4], nodes: &Vec<Node>) -> i32 {
-    let mut idx = 0;
+    let mut idx: usize = 0;
     loop {
         let node = &nodes[idx];
         if node.class_label != -1 {
             return node.class_label;
         }
-        if sample[node.feature_index as usize] <= node.threshold {
+        let feat_idx = node.feature_index as usize;
+        if sample[feat_idx] <= node.threshold {
             idx = node.left as usize;
         } else {
             idx = node.right as usize;
@@ -182,14 +185,36 @@ fn eval_tree(sample: &[f32; 4], nodes: &Vec<Node>) -> i32 {
 risc0_zkvm::guest::entry!(main);
 
 fn main() {
-    // Directly read, no unwrap
-    let nodes: Vec<Node> = env::read::<Vec<Node>>();
+    // Read raw bytes sent by the host
+    let raw: Vec<u8> = env::read::<Vec<u8>>();
 
-    let mut predictions = Vec::new();
+    let node_size = 20usize; // u32 + f32 + i32 + i32 + i32
+    let mut nodes: Vec<Node> = Vec::new();
+
+    // Parse bytes into Node structs
+    for chunk in raw.chunks_exact(node_size) {
+        let feature_index = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
+        let threshold = f32::from_le_bytes(chunk[4..8].try_into().unwrap());
+        let left = i32::from_le_bytes(chunk[8..12].try_into().unwrap());
+        let right = i32::from_le_bytes(chunk[12..16].try_into().unwrap());
+        let class_label = i32::from_le_bytes(chunk[16..20].try_into().unwrap());
+
+        nodes.push(Node {
+            feature_index,
+            threshold,
+            left,
+            right,
+            class_label,
+        });
+    }
+
+    // Compute predictions
+    let mut predictions: Vec<u32> = Vec::new();
     for sample in VALIDATION_DATA.iter() {
         let predicted = eval_tree(sample, &nodes);
         predictions.push(predicted as u32);
     }
 
+    // Commit predictions to host through journal
     env::commit_slice(&predictions);
 }
