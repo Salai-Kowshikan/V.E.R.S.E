@@ -22,7 +22,7 @@ target
 
 
 #backend
-venv
+**/venv/
 __pycache__
 log
 .env
