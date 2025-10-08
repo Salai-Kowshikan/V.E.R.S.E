@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from controller.user import get_all_users, register_user, login_user
 from schemas.user import UserRegistration, UserLogin, UserResponse, Token
-from utils.auth import verify_token
+from utils.auth import get_current_user
+from models.user import User
 router = APIRouter()
 
 
@@ -17,8 +18,8 @@ async def login(user_data: UserLogin):
     return await login_user(user_data)
 
 
-@router.get("", dependencies=[Depends(verify_token)])
-async def list_users():
-
+@router.get("",response_model=list[UserResponse])
+async def list_users( current_user:User = Depends(get_current_user)):
     """Get all users"""
+    print(current_user+" accessed list_users endpoint")
     return await get_all_users()

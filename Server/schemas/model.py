@@ -9,7 +9,9 @@ class ValidationStatus(str, Enum):
     COMPLETED = "completed"
 
 class ModelCreate(BaseModel):
-    vectorFormat: Optional[str] = None
+    vectorFormat: str
+    name: str 
+    description: Optional[str] = None
 
 class ModelResponse(BaseModel):
     id: str
@@ -33,8 +35,6 @@ class ValidationRequestResponse(BaseModel):
     elfFileUrl: str
     status: ValidationStatus
     createdAt: datetime
-    verifiedAt: Optional[datetime] = None
-    comments: Optional[str] = None
 
 class ValidationRequestUpdate(BaseModel):
     status: Optional[ValidationStatus] = None
