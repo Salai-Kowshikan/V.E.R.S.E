@@ -51,6 +51,8 @@ async def get_user_models(current_user: User):
                 id=str(model.id),
                 userId=str(current_user.id),
                 vectorFormat=model.vectorFormat,
+                name=model.name,
+                description=model.description,
                 createdAt=model.createdAt,
                 updatedAt=model.updatedAt
             )
@@ -72,6 +74,8 @@ async def get_all_models_controller():
                 id=str(model.id),
                 userId=str(model.userId.ref.id),
                 vectorFormat=model.vectorFormat,
+                name=model.name,
+                description=model.description,
                 createdAt=model.createdAt,
                 updatedAt=model.updatedAt
             )
@@ -88,6 +92,7 @@ async def get_all_models_controller():
 async def create_validation_request_with_file(
     model_id: str,
     elf_file: UploadFile,
+    hashValue : str,
     current_user: User
 ) -> ValidationRequestResponse:
     """Create a new validation request with ELF file upload"""
@@ -161,6 +166,7 @@ async def create_validation_request_with_file(
         validation_request = ValidationRequest(
             modelId=model,
             verifierId=current_user,
+            proofHash=hashValue,
             elfFileUrl=file_url
         )
         
@@ -171,6 +177,7 @@ async def create_validation_request_with_file(
             modelId=str(validation_request.modelId.id),
             verifierId=str(validation_request.verifierId.id),
             elfFileUrl=validation_request.elfFileUrl,
+            proofHash=validation_request.proofHash,
             status=validation_request.status,
             createdAt=validation_request.createdAt,
         )
@@ -266,6 +273,8 @@ async def get_user_models_with_validations(current_user: User) -> UserModelsWith
                 ModelWithValidationsResponse(
                     id=str(model.id),
                     userId=str(model.userId.ref.id),
+                    name = model.name,
+                    description = model.description,
                     vectorFormat=model.vectorFormat,
                     createdAt=model.createdAt,
                     updatedAt=model.updatedAt,

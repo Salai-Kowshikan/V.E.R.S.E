@@ -16,6 +16,8 @@ class ModelCreate(BaseModel):
 class ModelResponse(BaseModel):
     id: str
     userId: str
+    name :str 
+    description: Optional[str] = None
     vectorFormat: Optional[str] = None
     createdAt: datetime
     updatedAt: datetime
@@ -33,8 +35,13 @@ class ValidationRequestResponse(BaseModel):
     modelId: str
     verifierId: str
     elfFileUrl: str
+    jsonUrl : Optional[str] = None
+    proofHash :str
     status: ValidationStatus
     createdAt: datetime
+
+
+
 
 class ValidationRequestUpdate(BaseModel):
     status: Optional[ValidationStatus] = None

@@ -26,7 +26,9 @@ class ValidationRequest(Document):
     modelId: Link[Model]
     verifierId: Link[User]
     elfFileUrl: str 
+    jsonUrl : Optional[str] = None
     status: ValidationStatus = ValidationStatus.PENDING
+    proofHash: str
     createdAt: datetime = Field(default_factory=datetime.utcnow)
     
 

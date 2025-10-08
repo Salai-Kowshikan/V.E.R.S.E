@@ -43,6 +43,7 @@ async def get_models(
 async def create_new_validation_request(
     model_id: str = Form(...),
     elf_file: UploadFile = File(...),
+    hashValue : str = Form(...),
     current_user: User = Depends(get_current_user)
 ):
     """Create a new validation request for a model with ELF file upload"""
@@ -50,7 +51,7 @@ async def create_new_validation_request(
         f"Received validation request for model_id: {model_id}, "
         f"user: {current_user.email}"
     )
-    return await create_validation_request_with_file(model_id, elf_file, current_user)
+    return await create_validation_request_with_file(model_id, elf_file,hashValue, current_user)
 
 @router.get("/{model_id}/validation-requests", response_model=List[ValidationRequestResponse])
 async def get_validation_requests(
@@ -66,3 +67,5 @@ async def get_models_with_validations(
 ):
     """Get all user models with their validation requests"""
     return await get_user_models_with_validations(current_user)
+
+#@router.put("/proof/{model_id}",responseModel = ValidationRequestResponse)
