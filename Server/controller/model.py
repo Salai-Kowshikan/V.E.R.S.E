@@ -227,6 +227,8 @@ async def get_model_validation_requests(model_id: str, current_user: User) -> Li
                 modelId=str(vr.modelId.ref.id),
                 verifierId=str(vr.verifierId.ref.id),
                 elfFileUrl=vr.elfFileUrl,
+                jsonUrl=getattr(vr, 'jsonUrl', None),
+                proofHash=vr.proofHash,
                 status=vr.status,
                 createdAt=vr.createdAt,
             )
@@ -263,6 +265,8 @@ async def get_user_models_with_validations(current_user: User) -> UserModelsWith
                     modelId=str(vr.modelId.ref.id),
                     verifierId=str(vr.verifierId.ref.id),
                     elfFileUrl=vr.elfFileUrl,
+                    jsonUrl=getattr(vr, 'jsonUrl', None),
+                    proofHash=vr.proofHash,
                     status=vr.status,
                     createdAt=vr.createdAt
                 )

@@ -7,8 +7,10 @@ use methods::{
 use std::fs;
 // Testing signing key
 fn main() {
-       fs::write("LinearRegression_exported", LINEARREGRESSION_ELF)
-        .expect("Failed to write ELF file");
+    fs::write("LinearRegression_exported", LINEARREGRESSION_ELF)
+    .expect("Failed to write ELF file");
+    fs::write("LinearRegression_ID_exported", format!("{:?}", LINEARREGRESSION_ID))
+        .expect("Failed to write ID file");
 }
 
 // fn main() {
