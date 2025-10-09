@@ -172,7 +172,15 @@ async def create_validation_request_with_file(
         
         await validation_request.insert()
         
-        return ValidationRequestResponse.from_validation_request(validation_request)
+        return ValidationRequestResponse(
+            id=str(validation_request.id),
+            modelId=str(validation_request.modelId.id),
+            verifierId=str(validation_request.verifierId.id),
+            elfFileUrl=validation_request.elfFileUrl,
+            proofHash=validation_request.proofHash,
+            status=validation_request.status,
+            createdAt=validation_request.createdAt,
+        )
         
     except HTTPException:
 
@@ -214,7 +222,16 @@ async def get_model_validation_requests(model_id: str, current_user: User) -> Li
        
         
         return [
-            ValidationRequestResponse.from_validation_request(vr)
+            ValidationRequestResponse(
+                id=str(vr.id),
+                modelId=str(vr.modelId.ref.id),
+                verifierId=str(vr.verifierId.ref.id),
+                elfFileUrl=vr.elfFileUrl,
+                jsonUrl=vr.jsonUrl,
+                proofHash=vr.proofHash,
+                status=vr.status,
+                createdAt=vr.createdAt,
+            )
             for vr in validation_requests
         ]
         
@@ -243,7 +260,16 @@ async def get_user_models_with_validations(current_user: User) -> UserModelsWith
             ).to_list()
             
             validation_responses = [
-                ValidationRequestResponse.from_validation_request(vr)
+                ValidationRequestResponse(
+                    id=str(vr.id),
+                    modelId=str(vr.modelId.ref.id),
+                    verifierId=str(vr.verifierId.ref.id),
+                    elfFileUrl=vr.elfFileUrl,
+                    jsonUrl=vr.jsonUrl,
+                    proofHash=vr.proofHash,
+                    status=vr.status,
+                    createdAt=vr.createdAt
+                )
                 for vr in validation_requests
             ]
             
@@ -376,7 +402,16 @@ async def add_proof_to_validation(validation_request_id: str, json_file: UploadF
         updated_validation_request = await ValidationRequest.find_one(ValidationRequest.id == validation_request_doc.id)
         print("Validation request updated successfully")
 
-        response = ValidationRequestResponse.from_validation_request(updated_validation_request)
+        response = ValidationRequestResponse(
+            id=str(updated_validation_request.id),
+            modelId=str(updated_validation_request.modelId.ref.id),
+            verifierId=str(updated_validation_request.verifierId.ref.id),
+            elfFileUrl=updated_validation_request.elfFileUrl,
+            jsonUrl=updated_validation_request.jsonUrl,
+            proofHash=getattr(updated_validation_request, 'proofHash', ''),  # Handle missing proofHash
+            status=updated_validation_request.status,
+            createdAt=updated_validation_request.createdAt,
+        )
         print(f"Returning response: {response}")
         return response
         
@@ -420,7 +455,17 @@ async def get_verifier_validation_requests_controller(current_user: User) -> Lis
                     updatedAt=model.updatedAt
                 )
             
-            validation_response = ValidationRequestResponse.from_validation_request(vr, model=model_response)
+            validation_response = ValidationRequestResponse(
+                id=str(vr.id),
+                modelId=str(vr.modelId.ref.id),
+                verifierId=str(vr.verifierId.ref.id),
+                elfFileUrl=vr.elfFileUrl,
+                jsonUrl=vr.jsonUrl,
+                proofHash=vr.proofHash,
+                status=vr.status,
+                createdAt=vr.createdAt,
+                model=model_response  # Include model in the constructor
+            )
             
             response_list.append(validation_response)
         

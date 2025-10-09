@@ -1,4 +1,4 @@
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -40,23 +40,6 @@ class ValidationRequestResponse(BaseModel):
     proofHash :str
     status: ValidationStatus
     createdAt: datetime
-
-    @classmethod
-    def from_validation_request(cls, validation_request, model=None):
-        """Create ValidationRequestResponse with public URLs appended"""
-        from utils.file import construct_public_url
-        
-        return cls(
-            id=str(validation_request.id),
-            modelId=str(validation_request.modelId.id if hasattr(validation_request.modelId, 'id') else validation_request.modelId),
-            verifierId=str(validation_request.verifierId.id if hasattr(validation_request.verifierId, 'id') else validation_request.verifierId),
-            elfFileUrl=construct_public_url(validation_request.elfFileUrl) if validation_request.elfFileUrl else "",
-            jsonUrl=construct_public_url(validation_request.jsonUrl) if validation_request.jsonUrl else None,
-            proofHash=validation_request.proofHash,
-            status=validation_request.status,
-            createdAt=validation_request.createdAt,
-            model=model
-        )
 
 
 
