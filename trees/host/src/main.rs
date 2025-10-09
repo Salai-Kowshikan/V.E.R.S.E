@@ -97,14 +97,23 @@
 //     Ok(())
 // }
 
-use std::env;
-use std::fs;
-use std::path::Path;
-use std::mem;
 
+
+
+
+
+//beta
+
+
+
+
+
+
+use std::{fs, path::Path};
 use risc0_zkvm::{default_prover, ExecutorEnv};
 use methods::{GUEST_CODE_FOR_ZK_PROOF_ELF, GUEST_CODE_FOR_ZK_PROOF_ID};
 
+// Node struct for host parsing
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Node {
@@ -115,12 +124,12 @@ pub struct Node {
     pub class_label: i32,
 }
 
-// Parse raw node bytes from Python
-fn parse_nodes_from_raw(file_bytes: &[u8]) -> Vec<Node> {
-    let node_size = mem::size_of::<Node>();
+// Parse raw node bytes
+fn parse_nodes_from_raw(raw_bytes: &[u8]) -> Vec<Node> {
+    let node_size = 20; // must match guest
     let mut nodes = Vec::new();
 
-    for chunk in file_bytes.chunks_exact(node_size) {
+    for chunk in raw_bytes.chunks_exact(node_size) {
         let feature_index = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
         let threshold = f32::from_le_bytes(chunk[4..8].try_into().unwrap());
         let left = i32::from_le_bytes(chunk[8..12].try_into().unwrap());
@@ -135,26 +144,23 @@ fn parse_nodes_from_raw(file_bytes: &[u8]) -> Vec<Node> {
             class_label,
         });
     }
-
     nodes
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let model_path = "iris_tree_nodes.bin";
-    println!("Current directory: {:?}", env::current_dir()?);
 
     if !Path::new(model_path).exists() {
-        println!("⚠️ File not found: {}", model_path);
-        return Ok(());
+        panic!("Model file not found: {}", model_path);
     }
 
-    // Read raw bytes
+    // Read bytes from Python-generated file
     let raw_bytes = fs::read(model_path)?;
-    println!("File size: {} bytes", raw_bytes.len());
+    println!("Read {} bytes from file", raw_bytes.len());
 
-    // Debug print
     let nodes = parse_nodes_from_raw(&raw_bytes);
-    println!("Parsed {} nodes locally:", nodes.len());
+    println!("Parsed {} nodes locally", nodes.len());
+
     for (i, node) in nodes.iter().enumerate() {
         println!(
             "Node {}: feature_index={}, threshold={}, left={}, right={}, class_label={}",
@@ -162,9 +168,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // Send raw bytes to guest
+    // Setup guest env
     let env = ExecutorEnv::builder()
-        .write(&raw_bytes)?  // guest reads raw bytes
+        .write(&raw_bytes)? // pass exactly raw bytes
         .build()?;
 
     // Run prover
@@ -175,7 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let predicted_classes: Vec<i32> = prove_info.receipt.journal.decode()?;
     println!("Predicted classes from guest: {:?}", predicted_classes);
 
-    // Expected validation labels
+    // Compare with expected labels
     let expected_classes = [0, 1, 2, 2, 0];
     for (i, &pred) in predicted_classes.iter().enumerate() {
         let expected = expected_classes[i];
