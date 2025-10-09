@@ -124,7 +124,6 @@ fn main() {
     let prove_info = prover.prove(env, &guest_elf).unwrap();
     let receipt = prove_info.receipt;
 
-    // Decode Vec<(f32, f32)>
     let output: Vec<(f32, f32)> = from_slice(receipt.journal.bytes.as_slice()).unwrap();
 
     println!("\n======= Inference Results =======");

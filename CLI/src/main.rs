@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
+use risc0_zkvm::Receipt;
 
 #[derive(Serialize)]
 struct RegisterRequest<'a> {
@@ -201,6 +202,47 @@ fn pretty_print_pending_validations(body: &str) {
     }
 }
 
+fn pretty_print_verifier_requests(body: &str) {
+    match serde_json::from_str::<Value>(body) {
+        Ok(Value::Array(items)) => {
+            if items.is_empty() {
+                println!("No validation requests found.");
+                return;
+            }
+            println!("Your validation requests ({}):", items.len());
+            for (i, item) in items.iter().enumerate() {
+                let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("-");
+                let model_id = item.get("modelId").and_then(|v| v.as_str()).unwrap_or("-");
+                let verifier_id = item.get("verifierId").and_then(|v| v.as_str()).unwrap_or("-");
+                let elf_url = item.get("elfFileUrl").and_then(|v| v.as_str()).unwrap_or("-");
+                let json_url = item.get("jsonUrl").and_then(|v| v.as_str()).unwrap_or("-");
+                let status = item.get("status").and_then(|v| v.as_str()).unwrap_or("-");
+                let created = item.get("createdAt").and_then(|v| v.as_str()).unwrap_or("-");
+                let model_name = item
+                    .get("model")
+                    .and_then(|m| m.get("name"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let proof_hash = item.get("proofHash").and_then(|v| v.as_str()).unwrap_or("-");
+
+                println!("\n{}. validation request:", i + 1);
+                println!("   id:           {}", id);
+                println!("   modelId:      {}{}",
+                    model_id,
+                    if model_name.is_empty() { String::new() } else { format!(", name: {}", model_name) }
+                );
+                println!("   verifierId:   {}", verifier_id);
+                println!("   elfFileUrl:   {}", elf_url);
+                println!("   jsonUrl:      {}", json_url);
+                println!("   proofHash:    {}", proof_hash);
+                println!("   status:       {}", status);
+                println!("   createdAt:    {}", created);
+            }
+        }
+        _ => println!("{}", body),
+    }
+}
+
 fn main() {
     let matches = Command::new("verse")
         .version("1.0")
@@ -217,12 +259,20 @@ fn main() {
             Command::new("request")
                 .about("Build the ZK guest and send a validation request for a model")
                 .arg(
+                    Arg::new("list")
+                        .long("list")
+                        .help("List all validation requests placed by you (verifier)")
+                        .required(false)
+                        .action(clap::ArgAction::SetTrue)
+                        .conflicts_with_all(["model-id", "dir", "elf"]),
+                )
+                .arg(
                     Arg::new("model-id")
                         .long("model-id")
                         .short('m')
                         .help("The target model ID to request validation for")
                         .value_name("MODEL_ID")
-                        .required(true),
+                        .required_unless_present("list"),
                 )
                 .arg(
                     Arg::new("dir")
@@ -270,6 +320,52 @@ fn main() {
                         .help("Password")
                         .value_name("PASSWORD")
                         .required(true),
+                ),
+        )
+        .subcommand(
+            Command::new("prove")
+                .about("Download the ELF for a validation request and run the Zk-host prover")
+                .arg(
+                    Arg::new("model-id")
+                        .long("model-id")
+                        .short('m')
+                        .help("The model ID associated with the request (for info only)")
+                        .value_name("MODEL_ID")
+                        .required(true),
+                )
+                .arg(
+                    Arg::new("request-id")
+                        .long("request-id")
+                        .short('r')
+                        .help("The validation request ID to prove")
+                        .value_name("REQUEST_ID")
+                        .required(true),
+                )
+                .arg(
+                    Arg::new("zk-host-dir")
+                        .long("zk-host-dir")
+                        .help("Path to the Zk-host workspace directory where guest-elf will be saved")
+                        .value_name("DIR")
+                        .default_value("../Zk-host"),
+                ),
+        )
+        .subcommand(
+            Command::new("verify")
+                .about("Download the proof JSON for a validation request and verify it using RISC Zero")
+                .arg(
+                    Arg::new("request-id")
+                        .long("request-id")
+                        .short('r')
+                        .help("The validation request ID whose proof to verify")
+                        .value_name("REQUEST_ID")
+                        .required(true),
+                )
+                .arg(
+                    Arg::new("out")
+                        .long("out")
+                        .help("Optional path to save downloaded proof.json; defaults to ./proof.json")
+                        .value_name("FILE")
+                        .required(false),
                 ),
         )
         .subcommand(
@@ -322,7 +418,31 @@ fn main() {
 
     match matches.subcommand() {
         Some(("request", sub_m)) => {
-            // Create/send validation request path
+            // If --list is provided, list all requests placed by the verifier
+            if sub_m.get_flag("list") {
+                let auth = match load_auth() { Ok(a) => a, Err(e) => { eprintln!("{}", e); std::process::exit(1); } };
+                let url = std::env::var("VERSE_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
+                let endpoint = format!("{}/api/model/validation-requests/verifier", url.trim_end_matches('/'));
+                let client = reqwest::blocking::Client::new();
+                match client
+                    .get(endpoint)
+                    .header(AUTHORIZATION, format!("Bearer {}", auth.access_token))
+                    .send()
+                {
+                    Ok(resp) => {
+                        let status = resp.status();
+                        match resp.text() {
+                            Ok(body) => {
+                                if status.is_success() { pretty_print_verifier_requests(&body); std::process::exit(0); }
+                                else { eprintln!("List failed ({}): {}", status, body); std::process::exit(1); }
+                            }
+                            Err(e) => { eprintln!("Failed to read response body: {}", e); std::process::exit(1); }
+                        }
+                    }
+                    Err(e) => { eprintln!("HTTP request error: {}", e); std::process::exit(1); }
+                }
+            }
+
             let model_id = sub_m
                 .get_one::<String>("model-id")
                 .map(String::as_str)
@@ -335,7 +455,6 @@ fn main() {
 
             let explicit_elf = sub_m.get_one::<String>("elf").map(String::as_str);
 
-            // 1) Build/Run guest to produce/export the ELF (if user didn't supply an ELF)
             if explicit_elf.is_none() {
                 println!("Running `cargo run --release` in: {}", dir);
                 let status = std::process::Command::new("cargo")
@@ -362,7 +481,6 @@ fn main() {
 
             if !elf_path.exists() { eprintln!("ELF file not found: {}", elf_path.display()); std::process::exit(1); }
 
-            // Read hash value exported by guest (LinearRegression_ID_exported)
             let id_path = PathBuf::from(dir).join("LinearRegression_ID_exported");
             let hash_value = match fs::read_to_string(&id_path) {
                 Ok(s) => s.trim().to_string(),
@@ -379,8 +497,6 @@ fn main() {
                 Ok(a) => a,
                 Err(e) => { eprintln!("{}", e); std::process::exit(1); }
             };
-
-            // 4) Send multipart POST to /api/model/validation-request
             let url = std::env::var("VERSE_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
             let endpoint = format!("{}/api/model/validation-request", url.trim_end_matches('/'));
             println!("Uploading validation request for model {} with ELF: {}", model_id, elf_path.display());
@@ -491,7 +607,6 @@ fn main() {
                                     .duration_since(UNIX_EPOCH)
                                     .unwrap_or_default()
                                     .as_secs();
-                                // subtract a small skew (30s) to avoid edge expiry
                                 let expires_at = now + token.expires_in.saturating_sub(30);
                                 let store = AuthStore {
                                     access_token: token.access_token,
@@ -529,14 +644,249 @@ fn main() {
                 }
             }
         }
+        Some(("prove", sub_m)) => {
+            let _model_id = sub_m
+                .get_one::<String>("model-id")
+                .map(String::as_str)
+                .expect("--model-id is required");
+            let request_id = sub_m
+                .get_one::<String>("request-id")
+                .map(String::as_str)
+                .expect("--request-id is required");
+            let zk_host_dir = sub_m
+                .get_one::<String>("zk-host-dir")
+                .map(String::as_str)
+                .unwrap_or("../Zk-host");
+
+            let auth = match load_auth() { Ok(a) => a, Err(e) => { eprintln!("{}", e); std::process::exit(1); } };
+            let url = std::env::var("VERSE_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
+            let base = url.trim_end_matches('/');
+
+            let info_endpoint = format!("{}/api/model/validation-request/{}", base, request_id);
+            let client = reqwest::blocking::Client::new();
+            let info_body = match client
+                .get(&info_endpoint)
+                .header(AUTHORIZATION, format!("Bearer {}", auth.access_token))
+                .send()
+            {
+                Ok(resp) => {
+                    let status = resp.status();
+                    match resp.text() {
+                        Ok(body) => {
+                            if !status.is_success() { eprintln!("Fetch request info failed ({}): {}", status, body); std::process::exit(1); }
+                            body
+                        }
+                        Err(e) => { eprintln!("Failed to read response body: {}", e); std::process::exit(1); }
+                    }
+                }
+                Err(e) => { eprintln!("HTTP request error: {}", e); std::process::exit(1); }
+            };
+
+            let info_json: Value = match serde_json::from_str(&info_body) {
+                Ok(v) => v,
+                Err(e) => { eprintln!("Failed to parse request info JSON: {}", e); std::process::exit(1); }
+            };
+            let elf_key_or_url = info_json.get("elfFileUrl").and_then(|v| v.as_str()).unwrap_or("");
+            if elf_key_or_url.is_empty() { eprintln!("Request has no elfFileUrl"); std::process::exit(1); }
+            let save_dir = PathBuf::from(zk_host_dir);
+            if let Err(e) = fs::create_dir_all(&save_dir) { eprintln!("Failed to create dir {}: {}", save_dir.display(), e); std::process::exit(1); }
+            let save_path = save_dir.join("guest-elf");
+
+            println!("Prove: request {} => elfFileUrl: {}", request_id, elf_key_or_url);
+            // Prefer public R2 bucket for relative keys; allow override via VERSE_R2_PUBLIC_URL
+            let (download_url, use_public_bucket) = if elf_key_or_url.starts_with("http://") || elf_key_or_url.starts_with("https://") {
+                (elf_key_or_url.to_string(), false)
+            } else {
+                let r2_base = std::env::var("VERSE_R2_PUBLIC_URL")
+                    .unwrap_or_else(|_| "https://pub-eb24a8604ce54e00991962507f2d1cbb.r2.dev".to_string());
+                (
+                    format!("{}/{}", r2_base.trim_end_matches('/'), elf_key_or_url.trim_start_matches('/')),
+                    true,
+                )
+            };
+
+            println!("Downloading ELF from: {}", download_url);
+            let mut req = client.get(&download_url);
+            if !use_public_bucket {
+                req = req.header(AUTHORIZATION, format!("Bearer {}", auth.access_token));
+            }
+            let mut resp = match req.send() {
+                Ok(r) => r,
+                Err(e) => { eprintln!("Download request error: {}", e); std::process::exit(1); }
+            };
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let body = resp.text().unwrap_or_default();
+                if use_public_bucket {
+                    eprintln!(
+                        "Failed to download ELF ({}): {}\nTried public bucket URL: {}\nHint: ensure VERSE_R2_PUBLIC_URL is correct or elfFileUrl points to the right object path.",
+                        status, body, download_url
+                    );
+                } else {
+                    eprintln!(
+                        "Failed to download ELF ({}): {}\nHint: the server should serve '{}' at the API base; otherwise expose a download endpoint or return a full URL.",
+                        status, body, elf_key_or_url
+                    );
+                }
+                std::process::exit(1);
+            }
+            let mut out = match fs::File::create(&save_path) { Ok(f) => f, Err(e) => { eprintln!("Failed to create {}: {}", save_path.display(), e); std::process::exit(1); } };
+            if let Err(e) = std::io::copy(&mut resp, &mut out) { eprintln!("Failed to save ELF to {}: {}", save_path.display(), e); std::process::exit(1); }
+            println!("Saved ELF to {}", save_path.display());
+
+            println!("Starting prover in {}. When prompted for 'Enter path to guest ELF file:', type: guest-elf", save_dir.display());
+            let status = std::process::Command::new("cargo")
+                .arg("run")
+                .arg("--release")
+                .current_dir(&save_dir)
+                .status();
+            match status {
+                Ok(s) => {
+                    if !s.success() {
+                        if let Some(code) = s.code() { eprintln!("Prover exited with code {}", code); }
+                        else { eprintln!("Prover terminated by signal"); }
+                        std::process::exit(1);
+                    }
+                }
+                Err(e) => { eprintln!("Failed to start prover: {}", e); std::process::exit(1); }
+            }
+
+            let proof_path = save_dir.join("proof.json");
+            if !proof_path.exists() {
+                eprintln!("Expected proof file not found at {}", proof_path.display());
+                std::process::exit(1);
+            }
+            println!("Uploading proof from {}...", proof_path.display());
+
+            let put_endpoint = format!("{}/api/model/proof/{}", base, request_id);
+            let proof_file = match fs::File::open(&proof_path) {
+                Ok(f) => f,
+                Err(e) => { eprintln!("Failed to open proof file: {}", e); std::process::exit(1); }
+            };
+            let proof_part = reqwest::blocking::multipart::Part::reader(proof_file)
+                .file_name("proof.json".to_string())
+                .mime_str("application/json").unwrap();
+            let form = reqwest::blocking::multipart::Form::new()
+                .part("json_file", proof_part);
+
+            match client
+                .put(&put_endpoint)
+                .header(AUTHORIZATION, format!("Bearer {}", auth.access_token))
+                .multipart(form)
+                .send()
+            {
+                Ok(resp) => {
+                    let status = resp.status();
+                    match resp.text() {
+                        Ok(body) => {
+                            if status.is_success() { println!("Proof uploaded successfully: {}", body); std::process::exit(0); }
+                            else { eprintln!("Proof upload failed ({}): {}", status, body); std::process::exit(1); }
+                        }
+                        Err(e) => { eprintln!("Failed to read response body: {}", e); std::process::exit(1); }
+                    }
+                }
+                Err(e) => { eprintln!("HTTP request error during proof upload: {}", e); std::process::exit(1); }
+            }
+        }
+        Some(("verify", sub_m)) => {
+            let request_id = sub_m
+                .get_one::<String>("request-id")
+                .map(String::as_str)
+                .expect("--request-id is required");
+            let out_path = sub_m
+                .get_one::<String>("out")
+                .map(String::as_str)
+                .unwrap_or("proof.json");
+
+            let auth = match load_auth() { Ok(a) => a, Err(e) => { eprintln!("{}", e); std::process::exit(1); } };
+            let url = std::env::var("VERSE_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
+            let base = url.trim_end_matches('/');
+            let info_endpoint = format!("{}/api/model/validation-request/{}", base, request_id);
+            let client = reqwest::blocking::Client::new();
+
+            // Fetch request info to get jsonUrl and proofHash
+            let info_body = match client
+                .get(&info_endpoint)
+                .header(AUTHORIZATION, format!("Bearer {}", auth.access_token))
+                .send()
+            {
+                Ok(resp) => {
+                    let status = resp.status();
+                    match resp.text() {
+                        Ok(body) => { if !status.is_success() { eprintln!("Fetch request info failed ({}): {}", status, body); std::process::exit(1); } body }
+                        Err(e) => { eprintln!("Failed to read response body: {}", e); std::process::exit(1); }
+                    }
+                }
+                Err(e) => { eprintln!("HTTP request error: {}", e); std::process::exit(1); }
+            };
+            let info_json: Value = match serde_json::from_str(&info_body) { Ok(v) => v, Err(e) => { eprintln!("Failed to parse request info JSON: {}", e); std::process::exit(1); } };
+            let json_key_or_url = info_json.get("jsonUrl").and_then(|v| v.as_str()).unwrap_or("");
+            if json_key_or_url.is_empty() { eprintln!("Request has no jsonUrl (proof not available yet?)"); std::process::exit(1); }
+
+            // Build public bucket URL for relative keys
+            let download_url = if json_key_or_url.starts_with("http://") || json_key_or_url.starts_with("https://") {
+                json_key_or_url.to_string()
+            } else {
+                let r2_base = std::env::var("VERSE_R2_PUBLIC_URL").unwrap_or_else(|_| "https://pub-eb24a8604ce54e00991962507f2d1cbb.r2.dev".to_string());
+                format!("{}/{}", r2_base.trim_end_matches('/'), json_key_or_url.trim_start_matches('/'))
+            };
+
+            println!("Downloading proof from: {}", download_url);
+            let mut resp = match client.get(&download_url).send() { Ok(r) => r, Err(e) => { eprintln!("Download request error: {}", e); std::process::exit(1); } };
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let body = resp.text().unwrap_or_default();
+                eprintln!("Failed to download proof ({}): {}", status, body);
+                std::process::exit(1);
+            }
+            let mut out = match fs::File::create(out_path) { Ok(f) => f, Err(e) => { eprintln!("Failed to create output file: {}", e); std::process::exit(1); } };
+            if let Err(e) = std::io::copy(&mut resp, &mut out) { eprintln!("Failed to save proof: {}", e); std::process::exit(1); }
+            println!("Saved proof to {}", out_path);
+
+            // Parse proofHash into [u32; 8]
+            let method_id_arr: [u32; 8] = {
+                // proofHash is provided as a string HASH_ID; expect a comma-separated list or JSON array-like string
+                let ph_val = info_json.get("proofHash").cloned().unwrap_or(Value::Null);
+                let parse_err = || {
+                    eprintln!("Invalid or missing proofHash in response; expected a comma-separated 8 u32 values or JSON array string.");
+                    std::process::exit(1);
+                };
+                let mut nums: Vec<u32> = Vec::new();
+                match ph_val {
+                    Value::String(s) => {
+                        // Accept formats like: "[1,2,3,4,5,6,7,8]" or "1,2,3,4,5,6,7,8"
+                        let s = s.trim().trim_matches(|c| c == '[' || c == ']');
+                        for part in s.split(',') {
+                            let p = part.trim();
+                            if p.is_empty() { continue; }
+                            match p.parse::<u32>() { Ok(n) => nums.push(n), Err(_) => parse_err() }
+                        }
+                    }
+                    Value::Array(arr) => {
+                        for v in arr { match v.as_u64() { Some(n) if n <= u32::MAX as u64 => nums.push(n as u32), _ => parse_err() } }
+                    }
+                    _ => parse_err(),
+                }
+                if nums.len() != 8 { parse_err(); }
+                [nums[0], nums[1], nums[2], nums[3], nums[4], nums[5], nums[6], nums[7]]
+            };
+
+            // Deserialize receipt from saved proof
+            let data = match fs::read_to_string(out_path) { Ok(s) => s, Err(e) => { eprintln!("Failed to read proof file: {}", e); std::process::exit(1); } };
+            let receipt: Receipt = match serde_json::from_str(&data) { Ok(r) => r, Err(e) => { eprintln!("Failed to parse receipt JSON: {}", e); std::process::exit(1); } };
+
+            // Verify
+            match receipt.verify(method_id_arr) {
+                Ok(_) => { println!("✅ Proof verified successfully!"); std::process::exit(0); }
+                Err(e) => { println!("❌ Verification failed: {:?}", e); std::process::exit(1); }
+            }
+        }
         Some(("model", sub_m)) => {
-            // Common setup
             let url = std::env::var("VERSE_API_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
             let base = url.trim_end_matches('/');
             let client = reqwest::blocking::Client::new();
 
-            // If --requests flag is provided, list pending validation requests
             if sub_m.get_flag("requests") {
                 let auth = match load_auth() {
                     Ok(a) => a,
