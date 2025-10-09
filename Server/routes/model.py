@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File, Form
 from controller.model import (
     create_model, get_user_models,  get_model_validation_requests, get_user_models_with_validations,
-    create_validation_request_with_file, get_all_models_controller, add_proof_to_validation, get_verifier_validation_requests_controller
+    create_validation_request_with_file, get_all_models_controller, add_proof_to_validation, get_verifier_validation_requests_controller,get_particular_validation_request
 )
 from schemas.model import (
     ModelCreate, ModelResponse, 
@@ -90,8 +90,8 @@ async def get_validation_request_by_id(
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific validation request by its ID"""
-    validation_requests = await get_verifier_validation_requests_controller(current_user)
-    for request in validation_requests:
-        if request.id == validation_request_id:
-            return request
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Validation request not found")
+    validation_request = await get_particular_validation_request(validation_request_id)
+    if validation_request:
+        return ValidationRequestResponse.from_validation_request(validation_request)
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Validation request not found")
