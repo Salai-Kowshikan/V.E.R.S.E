@@ -476,7 +476,7 @@ fn main() {
             let elf_path: PathBuf = if let Some(p) = explicit_elf {
                 PathBuf::from(p)
             } else {
-                PathBuf::from("/home/kowshik/V.E.R.S.E/ZK-guest/LinearRegression_exported")
+                PathBuf::from("../ZK-guest/LinearRegression_exported")
             };
 
             if !elf_path.exists() { eprintln!("ELF file not found: {}", elf_path.display()); std::process::exit(1); }
