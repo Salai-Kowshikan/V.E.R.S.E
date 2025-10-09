@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File, Form
 from controller.model import (
     create_model, get_user_models,  get_model_validation_requests, get_user_models_with_validations,
-    create_validation_request_with_file, get_all_models_controller
+    create_validation_request_with_file, get_all_models_controller, add_proof_to_validation
 )
 from schemas.model import (
     ModelCreate, ModelResponse, 
@@ -68,4 +68,11 @@ async def get_models_with_validations(
     """Get all user models with their validation requests"""
     return await get_user_models_with_validations(current_user)
 
-#@router.put("/proof/{model_id}",responseModel = ValidationRequestResponse)
+@router.put("/proof/{validation_request_id}",response_model = ValidationRequestResponse) 
+async def add_proof_to_validation_request(
+    validation_request_id: str,
+    json_file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Append JSON proof file to an existing validation request"""
+    return await add_proof_to_validation(validation_request_id, json_file, current_user)
