@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""
     r2_bucket_name: str = ""
+    r2_base_url: str = ""
 
     debug: bool = False
 

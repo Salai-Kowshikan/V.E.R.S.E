@@ -377,3 +377,41 @@ def test_r2_operations():
 
         print("\n--- Cloudflare R2 Test Completed ---\n")
 
+
+def construct_public_url(file_key: str) -> str:
+    """
+    Construct public URL for R2 files using the base URL from settings.
+    
+    Args:
+        file_key: The key/path of the file in R2
+        
+    Returns:
+        str: Complete public URL for the file
+    """
+    if not file_key:
+        return ""
+    
+    base_url = settings.r2_base_url.rstrip('/')
+    file_key = file_key.lstrip('/')
+    
+    return f"{base_url}/{file_key}"
+
+
+def append_public_urls_to_validation(validation_data: dict) -> dict:
+    """
+    Append public URLs to elf and proof files in validation response.
+    
+    Args:
+        validation_data: Dictionary containing validation data
+        
+    Returns:
+        dict: Updated validation data with public URLs
+    """
+    if 'elfFileUrl' in validation_data and validation_data['elfFileUrl']:
+        validation_data['elfFileUrl'] = construct_public_url(validation_data['elfFileUrl'])
+    
+    if 'jsonUrl' in validation_data and validation_data['jsonUrl']:
+        validation_data['jsonUrl'] = construct_public_url(validation_data['jsonUrl'])
+    
+    return validation_data
+
