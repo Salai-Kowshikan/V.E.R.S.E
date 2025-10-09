@@ -35,6 +35,7 @@ class ValidationRequestResponse(BaseModel):
     modelId: str
     verifierId: str
     elfFileUrl: str
+    model :Optional[ModelResponse] = None
     jsonUrl : Optional[str] = None
     proofHash :str
     status: ValidationStatus

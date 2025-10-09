@@ -424,3 +424,84 @@ async def add_proof_to_validation(validation_request_id: str, json_file: UploadF
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to add proof to validation request: {str(e)}"
         )
+    
+async def get_verifier_validation_requests_controller(current_user: User) -> List[ValidationRequestResponse]:
+    """Get all validation requests assigned to the current user as verifier"""
+    try:
+        print(f"Getting validation requests for verifier user ID: {current_user.id}")
+        
+        # Get validation requests where the current user is the verifier
+        validation_requests = await ValidationRequest.find(
+            ValidationRequest.verifierId.id == current_user.id
+        ).to_list()
+        
+        print(f"Found {len(validation_requests)} validation requests for verifier")
+        
+        response_list = []
+        for vr in validation_requests:
+            # Fetch the model data for each validation request
+            model = await Model.get(vr.modelId.ref.id)
+            
+            # Create model response if model exists
+            model_response = None
+            if model:
+                model_response = ModelResponse(
+                    id=str(model.id),
+                    userId=str(model.userId.ref.id),
+                    vectorFormat=model.vectorFormat,
+                    name=model.name,
+                    description=model.description,
+                    createdAt=model.createdAt,
+                    updatedAt=model.updatedAt
+                )
+            
+            validation_response = ValidationRequestResponse(
+                id=str(vr.id),
+                modelId=str(vr.modelId.ref.id),
+                verifierId=str(vr.verifierId.ref.id),
+                elfFileUrl=vr.elfFileUrl,
+                jsonUrl=vr.jsonUrl,
+                proofHash=vr.proofHash,
+                status=vr.status,
+                createdAt=vr.createdAt,
+                model=model_response  # Include model in the constructor
+            )
+            
+            response_list.append(validation_response)
+        
+        return response_list
+        
+    except Exception as e:
+        print(f"Unexpected error in get_verifier_validation_requests_controller: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve verifier validation requests: {str(e)}"
+        )
+async def get_particular_validation_request(validation_request_id: str) -> ValidationRequestResponse:
+    """Get a specific validation request by ID"""
+    try:
+        validation_request = await ValidationRequest.get(validation_request_id)
+        if not validation_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Validation request not found"
+            )
+        
+        return ValidationRequestResponse(
+            id=str(validation_request.id),
+            modelId=str(validation_request.modelId.ref.id),
+            verifierId=str(validation_request.verifierId.ref.id),
+            elfFileUrl=validation_request.elfFileUrl,
+            jsonUrl=validation_request.jsonUrl,
+            proofHash=validation_request.proofHash,
+            status=validation_request.status,
+            createdAt=validation_request.createdAt,
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve validation request: {str(e)}"
+        )
