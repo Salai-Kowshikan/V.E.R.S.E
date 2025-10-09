@@ -13,7 +13,7 @@ import uuid
 import tempfile
 import os
 from utils.file import get_r2_manager, add_file_to_r2
-from config.settings import Settings
+from config.settings import settings
 
 async def create_model(model_data: ModelCreate, current_user: User) -> ModelResponse:
     """Create a new model for the authenticated user"""
@@ -177,7 +177,7 @@ async def create_validation_request_with_file(
             id=str(validation_request.id),
             modelId=str(validation_request.modelId.id),
             verifierId=str(validation_request.verifierId.id),
-            elfFileUrl=f"{Settings.R2_BASE_URL}/{validation_request.elfFileUrl}",
+            elfFileUrl=f"{settings.r2_base_url}/{validation_request.elfFileUrl}",
             proofHash=validation_request.proofHash,
             status=validation_request.status,
             createdAt=validation_request.createdAt,
@@ -227,8 +227,8 @@ async def get_model_validation_requests(model_id: str, current_user: User) -> Li
                 id=str(vr.id),
                 modelId=str(vr.modelId.ref.id),
                 verifierId=str(vr.verifierId.ref.id),
-                elfFileUrl=f"{Settings.R2_BASE_URL}/{vr.elfFileUrl}",
-                jsonUrl=f"{Settings.R2_BASE_URL}/{vr.jsonUrl}",
+                elfFileUrl=f"{settings.r2_base_url}/{vr.elfFileUrl}",
+                jsonUrl=f"{settings.r2_base_url}/{vr.jsonUrl}" if vr.jsonUrl else None,
                 proofHash=vr.proofHash,
                 status=vr.status,
                 createdAt=vr.createdAt,
@@ -265,8 +265,8 @@ async def get_user_models_with_validations(current_user: User) -> UserModelsWith
                     id=str(vr.id),
                     modelId=str(vr.modelId.ref.id),
                     verifierId=str(vr.verifierId.ref.id),
-                    elfFileUrl=f"{Settings.R2_BASE_URL}/{vr.elfFileUrl}",
-                    jsonUrl=f"{Settings.R2_BASE_URL}/{vr.jsonUrl}",
+                    elfFileUrl=f"{settings.r2_base_url}/{vr.elfFileUrl}",
+                    jsonUrl=f"{settings.r2_base_url}/{vr.jsonUrl}" if vr.jsonUrl else None,
                     proofHash=vr.proofHash,
                     status=vr.status,
                     createdAt=vr.createdAt
@@ -407,8 +407,8 @@ async def add_proof_to_validation(validation_request_id: str, json_file: UploadF
             id=str(updated_validation_request.id),
             modelId=str(updated_validation_request.modelId.ref.id),
             verifierId=str(updated_validation_request.verifierId.ref.id),
-            elfFileUrl=f"{Settings.R2_BASE_URL}/{updated_validation_request.elfFileUrl}",
-            jsonUrl=f"{Settings.R2_BASE_URL}/{updated_validation_request.jsonUrl}",
+            elfFileUrl=f"{settings.r2_base_url}/{updated_validation_request.elfFileUrl}",
+            jsonUrl=f"{settings.r2_base_url}/{updated_validation_request.jsonUrl}" if updated_validation_request.jsonUrl else None,
             proofHash=getattr(updated_validation_request, 'proofHash', ''),  # Handle missing proofHash
             status=updated_validation_request.status,
             createdAt=updated_validation_request.createdAt,
@@ -460,8 +460,8 @@ async def get_verifier_validation_requests_controller(current_user: User) -> Lis
                 id=str(vr.id),
                 modelId=str(vr.modelId.ref.id),
                 verifierId=str(vr.verifierId.ref.id),
-                elfFileUrl=f"{Settings.R2_BASE_URL}/{vr.elfFileUrl}",
-                jsonUrl=f"{Settings.R2_BASE_URL}/{vr.jsonUrl}",
+                elfFileUrl=f"{settings.r2_base_url}/{vr.elfFileUrl}",
+                jsonUrl=f"{settings.r2_base_url}/{vr.jsonUrl}" if vr.jsonUrl else None,
                 proofHash=vr.proofHash,
                 status=vr.status,
                 createdAt=vr.createdAt,
@@ -492,8 +492,8 @@ async def get_particular_validation_request(validation_request_id: str) -> Valid
             id=str(validation_request.id),
             modelId=str(validation_request.modelId.ref.id),
             verifierId=str(validation_request.verifierId.ref.id),
-            elfFileUrl=f"{Settings.R2_BASE_URL}/{validation_request.elfFileUrl}",
-            jsonUrl=f"{Settings.R2_BASE_URL}/{validation_request.jsonUrl}",
+            elfFileUrl=f"{settings.r2_base_url}/{validation_request.elfFileUrl}",
+            jsonUrl=f"{settings.r2_base_url}/{validation_request.jsonUrl}" if validation_request.jsonUrl else None,
             proofHash=validation_request.proofHash,
             status=validation_request.status,
             createdAt=validation_request.createdAt,

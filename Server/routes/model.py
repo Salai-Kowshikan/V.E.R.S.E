@@ -90,7 +90,7 @@ async def get_validation_request_by_id(
     current_user: User = Depends(get_current_user)
 ):
     """Get a specific validation request by its ID"""
-    validation_request = await get_particular_validation_request(validation_request_id, current_user)
+    validation_request = await get_particular_validation_request(validation_request_id)
     if validation_request:  
         return validation_request
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Validation request not found")
