@@ -1,0 +1,31 @@
+{
+    "feature": 2,
+    "threshold": 2.4499998092651367,
+    "left": {
+        "weight": null
+    },
+    "right": {
+        "feature": 3,
+        "threshold": 1.75,
+        "left": {
+            "feature": 2,
+            "threshold": 4.949999809265137,
+            "left": {
+                "weight": null
+            },
+            "right": {
+                "weight": null
+            }
+        },
+        "right": {
+            "feature": 2,
+            "threshold": 4.849999904632568,
+            "left": {
+                "weight": null
+            },
+            "right": {
+                "weight": null
+            }
+        }
+    }
+}

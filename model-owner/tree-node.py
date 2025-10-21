@@ -116,7 +116,6 @@ def print_onnx_tree(model_path, feature_names=None, class_names=None):
     print("\n🌳 TreeEnsembleClassifier Structure:")
     recurse(0)
 
-# Example usage
 feature_names = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
 class_names = ["setosa", "versicolor", "virginica"]
 

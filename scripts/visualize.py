@@ -10,7 +10,7 @@ iris = load_iris()
 X, y = iris.data, iris.target
 
 # Train Decision Tree
-model = DecisionTreeClassifier(max_depth=5)
+model = DecisionTreeClassifier(max_depth=3)
 model.fit(X, y)
 
 # If you still have the original Scikit-learn model:

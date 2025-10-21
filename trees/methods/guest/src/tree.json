@@ -1,0 +1,7 @@
+{
+  "feature": [0, -2],
+  "threshold": [0, 0],
+  "children_left": [1, 0],
+  "children_right": [1, 0],
+  "values": [[1,0,0], [1,0,0]]
+}

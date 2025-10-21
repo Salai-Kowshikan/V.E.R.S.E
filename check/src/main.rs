@@ -46,6 +46,8 @@
 //     Ok(())
 // }
 
+//works
+
 
 // #![forbid(unsafe_code)]
 
@@ -78,7 +80,7 @@
 //     tracing::subscriber::set_global_default(subscriber)
 //         .expect("setting default subscriber failed");
 
-//     let model_path = "iris_tree_copy11.onnx";
+//     let model_path = "iris_tree_model.onnx";
 
 //     if !Path::new(model_path).exists() {
 //         return Err(format!("ONNX model file not found: {}", model_path).into());
@@ -119,63 +121,19 @@
 // }
 
 
-#![forbid(unsafe_code)]
 
-use ort::{environment::Environment, session::SessionBuilder, tensor::OrtOwnedTensor};
-use ndarray::array;
-use std::sync::Arc;
-use tracing::Level;
-use tracing_subscriber::FmtSubscriber;
-use std::path::Path;
-
-type Error = Box<dyn std::error::Error>;
+use std::process::Command;
 
 fn main() {
-    if let Err(e) = run() {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
-    }
+    let python_path = "/home/ezhildhiraviya/V.E.R.S.E/scripts/venv/bin/python3";
+
+    let output = Command::new(python_path)
+        .arg("tree-node.py")
+        .arg("iris_tree_model.onnx")
+        .output()
+        .expect("Failed to run Python script");
+
+    println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+    println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
 }
 
-fn run() -> Result<(), Error> {
-    // Setup logging
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::TRACE)
-        .finish();
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("setting default subscriber failed");
-
-    let model_path = "iris_tree_copy.onnx";
-    if !Path::new(model_path).exists() {
-        return Err(format!("ONNX model file not found: {}", model_path).into());
-    }
-    println!("Using model file: {}", model_path);
-
-    // Create shared environment
-    let environment = Arc::new(Environment::builder()
-        .with_name("iris-env")
-        .with_log_level(ort::LoggingLevel::Warning)
-        .build()?);
-
-    // Build session
-    let session = SessionBuilder::new(&environment)?
-        .with_optimization_level(ort::GraphOptimizationLevel::Basic)?
-        .with_number_threads(1)?
-        .with_model_from_file(model_path)?;
-
-    // Input: 1 sample, 4 features
-    let input = array![[5.1_f32, 3.5, 1.4, 0.2]];
-
-    // Run inference
-    let outputs: Vec<OrtOwnedTensor<f32, _>> = session.run(vec![input.into()])?;
-    let predictions = &outputs[0];
-
-    println!("Raw output: {:?}", predictions.as_slice()?);
-
-    // Map to class names
-    let classes = ["setosa", "versicolor", "virginica"];
-    let predicted_index = predictions.as_slice()?[0] as usize;
-    println!("Predicted class: {}", classes[predicted_index]);
-
-    Ok(())
-}
