@@ -1,7 +1,7 @@
 import json
 
 # Load the tree from a JSON file
-with open("tree.json", "r") as f:
+with open("onnx_json.json", "r") as f:
     tree_json = json.load(f)
 
 # Convert list to dict for fast lookup
@@ -11,7 +11,7 @@ def predict(features, node_id=0):
     node = tree[node_id]
     # Leaf node
     if node['feature'] is None:
-        return node['value'][0].index(max(node['value'][0]))
+        return node['value'].index(max(node['value']))
     # Traverse left or right
     if features[node['feature']] <= node['threshold']:
         return predict(features, node['left'])
