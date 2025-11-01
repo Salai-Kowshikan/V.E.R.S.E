@@ -34,45 +34,57 @@ fn get_dataset() -> Vec<Sample> {
     ]
 }
 
-fn traverse_tree(tree: &[TreeNode], sample: &[f64]) -> u32 {
-    let mut node_index = 0;
+fn build_id_index(nodes: &Vec<TreeNode>) -> Vec<usize> {
+    // Build a dense id->index map to handle arbitrary node ids
+    let mut max_id = 0usize;
+    for n in nodes.iter() { if n.id > max_id { max_id = n.id; } }
+    let mut map = vec![usize::MAX; max_id + 1];
+    for (idx, n) in nodes.iter().enumerate() { map[n.id] = idx; }
+    map
+}
 
+fn traverse_tree(nodes: &Vec<TreeNode>, id_index: &Vec<usize>, x: &[f64]) -> Vec<f64> {
+    let mut current_id: usize = 0;
     loop {
-        let node = &tree[node_index];
+        // Resolve node by id using the index map
+        if current_id >= id_index.len() { panic!("Unknown node id"); }
+        let idx = id_index[current_id];
+        if idx == usize::MAX { panic!("Unmapped node id"); }
+        let node = &nodes[idx];
 
-        // Leaf node detection
-        if !node.value.is_empty() {
-            return node.value[0]
-                .iter()
-                .enumerate()
-                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-                .unwrap()
-                .0 as u32;
+        if node.feature.is_none() {
+            return node.value[0].clone();
         }
 
-        // Internal node: must have all fields
-        let feature = node.feature.expect("Internal node must have feature");
-        let threshold = node.threshold.expect("Internal node must have threshold");
-        let left = node.left.expect("Internal node must have left child");
-        let right = node.right.expect("Internal node must have right child");
+        let feat = node.feature.unwrap();
+        let thr = node.threshold.unwrap();
+        let xf = x[feat];
 
-        node_index = if sample[feature] <= threshold { left } else { right };
+        if xf <= thr {
+            current_id = node.left.expect("Missing left child");
+        } else {
+            current_id = node.right.expect("Missing right child");
+        }
     }
 }
 
 risc0_zkvm::guest::entry!(main);
 
 fn main() {
-    // Read tree from host
-    let tree: Vec<TreeNode> = env::read();
+    let _tree_path: alloc::string::String = env::read();
+    let tree_json: alloc::string::String = env::read();
+    let tree: Vec<TreeNode> = match serde_json::from_str(&tree_json) {
+        Ok(t) => t,
+        Err(_) => panic!("Failed to parse tree JSON in guest"),
+    };
+    let id_index = build_id_index(&tree);
     let dataset = get_dataset();
     let mut predictions = Vec::new();
 
     for sample in dataset.iter() {
-        let pred = traverse_tree(&tree, &sample.features);
+        let pred = traverse_tree(&tree, &id_index, &sample.features);
         predictions.push((pred, sample.expected));
     }
 
-    // Commit predictions to host
     env::commit(&predictions);
 }

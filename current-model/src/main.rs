@@ -29,16 +29,13 @@ fn main() -> anyhow::Result<()> {
     println!("Predicted probabilities: {:?}", prob_sequence);
 
     for (i, map_val) in prob_sequence.iter().enumerate() {
-    // Extract map: class (i64) → probability (f32)
     let prob_map: HashMap<i64, f32> = map_val.try_extract_map::<i64, f32>()?;
     println!("--- Probability map {} ---", i + 1);
 
-    // Print all class-probability pairs
     for (class, prob) in &prob_map {
         println!("Class {} → Probability {:.3}", class, prob);
     }
 
-    // Find most likely class
     if let Some((best_class, best_prob)) = prob_map.iter().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()) {
         println!("Most likely class: {}, Probability: {:.3}", best_class, best_prob);
     }

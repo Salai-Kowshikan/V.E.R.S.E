@@ -22,6 +22,47 @@
 #![no_main]
 use risc0_zkvm::guest::env;
 
+pub fn run_onnx_inference(model_path: &str, input_data: &[f32]) -> Result<(), Box<dyn std::error::Error>> {
+    use ort::{session::{Session, builder::GraphOptimizationLevel}, value::{Tensor, DynValue, MapValueType}};
+    use std::collections::HashMap;
+
+    let mut session = Session::builder()?
+        .with_optimization_level(GraphOptimizationLevel::Level3)?
+        .with_intra_threads(4)?
+        .commit_from_file(model_path)?;
+
+    let shape = [1usize, input_data.len()];
+    let input_tensor = Tensor::from_array((shape, input_data.to_vec().into_boxed_slice()))?;
+
+    let mut outputs = session.run(ort::inputs!("float_input" => input_tensor))?;
+
+    let label_value: DynValue = outputs
+        .remove("output_label")
+        .expect("missing output_label");
+    let prob_value: DynValue = outputs
+        .remove("output_probability")
+        .expect("missing output_probability");
+
+    println!("Predicted label: {:?}", label_value.try_extract_array::<i64>()?);
+
+    let allocator = session.allocator();
+    let prob_sequence = prob_value.try_extract_sequence::<MapValueType<i64, f32>>(allocator)?;
+    println!("Predicted probabilities: {:?}", prob_sequence);
+
+    for (i, map_val) in prob_sequence.iter().enumerate() {
+        let prob_map: HashMap<i64, f32> = map_val.try_extract_map::<i64, f32>()?;
+        println!("--- Probability map {} ---", i + 1);
+        for (class, prob) in &prob_map {
+            println!("Class {} → Probability {:.3}", class, prob);
+        }
+        if let Some((best_class, best_prob)) = prob_map.iter().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()) {
+            println!("Most likely class: {}, Probability: {:.3}", best_class, best_prob);
+        }
+    }
+
+    Ok(())
+}
+
 fn linear_regression(x: f32, a: f32, b: f32) -> f32 {
     x * a + b
 }
@@ -48,7 +89,7 @@ fn main() {
     let model_type: u32 = env::read();
     let weights: Vec<f32> = env::read();
     let b: f32 = env::read();
-
+    let onnx_path: String = env::read();
    
     const DATASET: [([f32; 3], f32); 4] = [
         ([1.0, 2.0, 3.0], 14.0),
@@ -101,6 +142,10 @@ fn main() {
                 .collect()
         }
         _ => panic!("Unknown model type {}", model_type),
+        5 => {
+            run_onnx_inference(&onnx_path, &DATASET[0].0).unwrap();
+            vec![]
+        }
     };
 
     env::commit(&results);
