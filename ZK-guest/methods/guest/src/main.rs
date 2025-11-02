@@ -312,6 +312,49 @@ use std::fs::File;
 use std::env as std_env;
 use std::io::{BufRead, BufReader};
 
+pub fn run_onnx_inference(model_path: &str, input_data: &[f32]) -> Result<(), Box<dyn std::error::Error>> {
+    use ort::{session::{Session, builder::GraphOptimizationLevel}, value::{Tensor, DynValue, MapValueType}};
+    use std::collections::HashMap;
+
+    let mut session = Session::builder()?
+        .with_optimization_level(GraphOptimizationLevel::Level3)?
+        .with_intra_threads(4)?
+        .commit_from_file(model_path)?;
+
+    let shape = [1usize, input_data.len()];
+    let input_tensor = Tensor::from_array((shape, input_data.to_vec().into_boxed_slice()))?;
+
+    let mut outputs = session.run(ort::inputs!("float_input" => input_tensor))?;
+
+    let label_value: DynValue = outputs
+        .remove("output_label")
+        .expect("missing output_label");
+    let prob_value: DynValue = outputs
+        .remove("output_probability")
+        .expect("missing output_probability");
+
+    println!("Predicted label: {:?}", label_value.try_extract_array::<i64>()?);
+
+    let allocator = session.allocator();
+    let prob_sequence = prob_value.try_extract_sequence::<MapValueType<i64, f32>>(allocator)?;
+    println!("Predicted probabilities: {:?}", prob_sequence);
+
+    for (i, map_val) in prob_sequence.iter().enumerate() {
+        let prob_map: HashMap<i64, f32> = map_val.try_extract_map::<i64, f32>()?;
+        println!("--- Probability map {} ---", i + 1);
+        for (class, prob) in &prob_map {
+            println!("Class {} → Probability {:.3}", class, prob);
+        }
+        if let Some((best_class, best_prob)) = prob_map.iter().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()) {
+            println!("Most likely class: {}, Probability: {:.3}", best_class, best_prob);
+        }
+    }
+
+    Ok(())
+}
+
+
+
 // ------------------ Fixed point configuration ------------------
 const SCALE_BITS: i32 = 16;            // 2^16 scaling
 const SCALE: i64 = 1 << SCALE_BITS;    // 65536

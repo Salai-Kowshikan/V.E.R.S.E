@@ -1,0 +1,10 @@
+[package]
+name = "current-model"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ort = "=2.0.0-rc.10"
+openssl-sys = { version = "0.9", features = ["vendored"] }
+ndarray = "0.15"
+anyhow = "1.0.100"
