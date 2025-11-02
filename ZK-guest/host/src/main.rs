@@ -7,11 +7,96 @@ use methods::{
 use std::fs;
 // Testing signing key
 fn main() {
-    fs::write("LinearRegression_exported", LINEARREGRESSION_ELF)
+    fs::write("guest_elf", LINEARREGRESSION_ELF)
     .expect("Failed to write ELF file");
-    fs::write("LinearRegression_ID_exported", format!("{:?}", LINEARREGRESSION_ID))
+    fs::write("guest_id", format!("{:?}", LINEARREGRESSION_ID))
         .expect("Failed to write ID file");
 }
+
+
+
+// use std::fs;
+// use std::path::Path;
+// use std::process::Command;
+// use std::io::Write;
+// use anyhow::Result;
+// use rayon::prelude::*;
+
+// // ---------- Split dataset into batches ----------
+// fn split_into_batches<T: Clone>(data: &[T], batch_size: usize) -> Vec<Vec<T>> {
+//     data.chunks(batch_size).map(|c| c.to_vec()).collect()
+// }
+
+// // ---------- Main ----------
+// fn main() -> Result<()> {
+//     println!("🚀 Starting dataset embedding and ELF generation...");
+
+//     // Step 1: Load dataset from file
+//     let dataset_path = "../dataset.csv";
+//     let content = fs::read_to_string(dataset_path)
+//         .expect("❌ Failed to read dataset.csv");
+//     let lines: Vec<&str> = content.lines().collect();
+
+//     // Step 2: Split into batches (e.g., 75 per batch)
+//     let batch_size = 75;
+//     let batches = split_into_batches(&lines, batch_size);
+//     println!("📦 Total {} batches created.", batches.len());
+
+//     // Step 3: Create output folder
+//     let output_dir = "../guest/target/batches";
+//     fs::create_dir_all(output_dir)?;
+
+//     // Step 4: For each batch
+//     for (i, batch) in batches.iter().enumerate() {
+//         let batch_num = i + 1;
+//         println!("⚙️  Processing Batch {batch_num}...");
+
+//         // Create temporary dataset file
+//         let batch_dataset_path = format!("../guest/batch_dataset_{batch_num}.csv");
+//         let mut f = fs::File::create(&batch_dataset_path)?;
+//         for line in batch {
+//             writeln!(f, "{}", line)?;
+//         }
+
+//         // Step 5: Embed this dataset into guest code (replace CSV path)
+//         let guest_code_path = "../guest/src/main.rs";
+//         let original_code = fs::read_to_string(guest_code_path)
+//             .expect("❌ Failed to read guest main.rs");
+
+//         let modified_code = original_code.replace(
+//             "let csv_path = &args[1];",
+//             &format!("let csv_path = \"batch_dataset_{batch_num}.csv\";")
+//         );
+
+//         fs::write(guest_code_path, modified_code)?;
+
+//         // Step 6: Build guest ELF
+//         println!("🏗️  Building guest ELF for Batch {batch_num}...");
+//         let status = Command::new("cargo")
+//             .args(&["build", "--release", "--target", "riscv32im-risc0-zkvm-elf"])
+//             .current_dir("../guest")
+//             .status()
+//             .expect("❌ Failed to build guest ELF");
+//         assert!(status.success(), "❌ Cargo build failed for Batch {batch_num}");
+
+//         // Step 7: Move ELF to batches folder
+//         let elf_src = "../guest/target/riscv32im-risc0-zkvm-elf/release/guest";
+//         let elf_dest = format!("{output_dir}/batch_{batch_num}.elf");
+//         fs::copy(elf_src, &elf_dest)
+//             .expect("❌ Failed to copy batch ELF");
+//         println!("✅ Batch {batch_num} ELF written to {elf_dest}");
+
+//         // Step 8: Restore original guest code
+//         fs::write(guest_code_path, original_code)?;
+//     }
+
+//     println!("🎉 All batches processed successfully!");
+//     Ok(())
+// }
+
+
+
+
 
 // fn main() {
 

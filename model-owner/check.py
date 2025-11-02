@@ -1,0 +1,1 @@
+#  source /home/ezhildhiraviya/V.E.R.S.E/scripts/venv/bin/activate

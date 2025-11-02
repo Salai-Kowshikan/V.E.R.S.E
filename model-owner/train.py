@@ -26,6 +26,6 @@ onnx_model = convert_sklearn(model, initial_types=initial_type)
 onnx.save_model(onnx_model, "iris_tree.onnx")
 
 # Save the trained model using joblib
-joblib.dump(model, "iris_tree_model.joblib")
+# joblib.dump(model, "iris_tree_model.joblib")
 
 print("Model training and conversion to ONNX completed.")
