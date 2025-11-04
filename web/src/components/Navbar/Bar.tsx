@@ -1,9 +1,7 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
 import NavbarButton from "./NavbarButton";
 
 const Navbar: React.FC = () => {
-  const location = useLocation();
 
   return (
     <nav className="fixed inset-x-0 top-6 z-50 pointer-events-auto">
